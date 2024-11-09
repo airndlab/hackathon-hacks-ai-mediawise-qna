@@ -41,5 +41,15 @@ services:
     networks:
       - mw-net
 
+  metabase:
+    image: metabase/metabase:v0.50.29
+    ports:
+      - 3003:3000
+    volumes:
+      - ./data:/data
+    environment:
+      - MB_DB_FILE=/data/metabase.db
+      - MB_DB_TYPE=h2
+
 networks:
   mw-net:
