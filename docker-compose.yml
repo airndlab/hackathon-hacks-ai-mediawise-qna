@@ -1,0 +1,48 @@
+name: mw
+
+services:
+  searxng:
+    image: searxng/searxng:2024.11.8-2fbf15ecc
+    restart: unless-stopped
+    volumes:
+      - ./config/searxng:/etc/searxng:rw
+    ports:
+      - 4000:8080
+    networks:
+      - mw-net
+
+  perplexica-backend:
+    image: airndlab/perplexica-backend:2024.11.09-10-08
+    restart: unless-stopped
+    depends_on:
+      - searxng
+    environment:
+      - SEARXNG_API_URL=http://searxng:8080
+    ports:
+      - 3001:3001
+    volumes:
+      - backend-dbstore:/home/perplexica/data
+      - ./config/web.config.toml:/home/perplexica/config.toml
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    networks:
+      - mw-net
+
+  perplexica-frontend:
+    image: airndlab/perplexica-frontend:2024.11.09-10-07
+    restart: unless-stopped
+    depends_on:
+      - perplexica-backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://perplexica-backend:3001/api
+      - NEXT_PUBLIC_WS_URL=ws://perplexica-backend:3001
+    ports:
+      - 3000:3000
+    networks:
+      - mw-net
+
+networks:
+  mw-net:
+
+volumes:
+  backend-dbstore:
