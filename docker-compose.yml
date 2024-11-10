@@ -37,7 +37,7 @@ services:
       - NEXT_PUBLIC_API_URL=http://158.160.68.33:3001/api
       - NEXT_PUBLIC_WS_URL=ws://158.160.68.33:3001
     ports:
-      - 3000:3000
+      - 80:3000
     networks:
       - mw-net
 
