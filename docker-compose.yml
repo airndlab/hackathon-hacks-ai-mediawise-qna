@@ -1,6 +1,32 @@
 name: mw
 
 services:
+  qna:
+    image: airndlab/mediawise-rag:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [ gpu ]
+    ports:
+      - 8080:8080
+    volumes:
+      - ./config:/config
+      - ./dataset:/data/dataset
+    environment:
+      - VLLM_URL=http://vllm:8000/v1
+      - CHROMA_HOSTNAME=chroma
+      - CHROMA_PORT=8000
+      - YANDEX_API_TOKEN=${YANDEX_API_TOKEN}
+      - MAIN_DOCS_DIR=/data/dataset
+      - PROMPTS_CONFIG_PATH=/config/prompts.yaml
+      - RAG_CONFIG_PATH=/config/rag.yaml
+      - API_CONFIG_PATH=/config/api.yaml
+    networks:
+      - rzd-net
+
   searxng:
     image: searxng/searxng:2024.11.8-2fbf15ecc
     restart: unless-stopped
@@ -12,7 +38,7 @@ services:
       - mw-net
 
   perplexica-backend:
-    image: airndlab/perplexica-backend:2024.11.09-23-22
+    image: airndlab/perplexica-backend:2024.11.10-07-33
     restart: unless-stopped
     depends_on:
       - searxng
@@ -36,6 +62,9 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://158.160.68.33:3001/api
       - NEXT_PUBLIC_WS_URL=ws://158.160.68.33:3001
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
     ports:
       - 80:3000
     networks:
