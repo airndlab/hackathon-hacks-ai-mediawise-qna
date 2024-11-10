@@ -31,7 +31,7 @@
 - **Задача:** Обеспечивает интерфейс общения с пользователями
 - **Технологии:** Perplexica, React.
 - **Детали:**
-    - Основной интерфейс на основе fork [Perplexica](https://github.com/ItzCrazyKns/Perplexica).
+    - Основной интерфейс на основе fork [Perplexica](https://github.com/airndlab/Perplexica).
     - Ведение и хранение диалогов
     - Загрузка документов в s3 совместимое хранилище
 
