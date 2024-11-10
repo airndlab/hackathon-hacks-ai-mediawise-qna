@@ -1,0 +1,26 @@
+model: Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4
+embedding_model: intfloat/multilingual-e5-large-instruct
+
+split_function:
+  max_chunk_size: 300
+  overlap: 0
+
+rag_gen_kwargs:
+  max_tokens: 2048
+  top_p: 0.8
+  temperature: 0.3
+
+json_gen_kwargs:
+  max_tokens: 512
+  top_p: 0.9
+  temperature: 0.3
+  frequency_penalty: 1.2
+
+bm25_retriever:
+  top_k: 3
+
+embedding_retriever:
+  top_k: 3
+
+document_joiner:
+  top_k: 6
