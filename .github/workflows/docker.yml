@@ -1,0 +1,74 @@
+name: Docker image
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project name'
+        required: true
+        type: choice
+        options:
+          - rag
+  release:
+    types:
+      - created
+
+env:
+  PATH_MAP: |
+    rag=rag
+  IMAGE_MAP: |
+    rag=mediawise-rag
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set path and image name based on project
+        id: set_vars
+        run: |
+          PROJECT="${{ github.event.inputs.project }}"
+          
+          IFS=$'\n'
+          for entry in $PATH_MAP; do
+            KEY="${entry%%=*}"
+            VALUE="${entry#*=}"
+            if [ "$KEY" == "$PROJECT" ]; then
+              echo "path=$VALUE" >> $GITHUB_ENV
+            fi
+          done
+          
+          for entry in $IMAGE_MAP; do
+            KEY="${entry%%=*}"
+            VALUE="${entry#*=}"
+            if [ "$KEY" == "$PROJECT" ]; then
+              echo "image_name=$VALUE" >> $GITHUB_ENV
+            fi
+          done
+
+      - name: Generate date tag
+        id: date_tag
+        run: |
+          echo "tag=$(date +'%Y.%m.%d-%H-%M')" >> $GITHUB_ENV
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push to Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ github.workspace }}/${{ env.path }}
+          push: true
+          tags: airndlab/${{ env.image_name }}:${{ env.tag }}
