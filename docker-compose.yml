@@ -43,6 +43,7 @@ services:
 
   metabase:
     image: metabase/metabase:v0.50.29
+    restart: unless-stopped
     ports:
       - 3003:3000
     volumes:
@@ -51,5 +52,18 @@ services:
       - MB_DB_FILE=/data/metabase.db
       - MB_DB_TYPE=h2
 
+  chroma:
+    image: chromadb/chroma:0.5.18
+    restart: unless-stopped
+    ports:
+      - 8000:8000
+    volumes:
+      - chroma-data:/chroma/chroma
+    networks:
+      - mw-net
+
 networks:
   mw-net:
+
+volumes:
+  chroma-data:
