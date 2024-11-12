@@ -1,32 +1,6 @@
 name: mw
 
 services:
-  qna:
-    image: airndlab/mediawise-rag:latest
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ '0' ]
-              capabilities: [ gpu ]
-    ports:
-      - 8080:8080
-    volumes:
-      - ./config:/config
-      - ./dataset:/data/dataset
-    environment:
-      - VLLM_URL=http://vllm:8000/v1
-      - CHROMA_HOSTNAME=chroma
-      - CHROMA_PORT=8000
-      - YANDEX_API_TOKEN=${YANDEX_API_TOKEN}
-      - MAIN_DOCS_DIR=/data/dataset
-      - PROMPTS_CONFIG_PATH=/config/prompts.yaml
-      - RAG_CONFIG_PATH=/config/rag.yaml
-      - API_CONFIG_PATH=/config/api.yaml
-    networks:
-      - rzd-net
-
   searxng:
     image: searxng/searxng:2024.11.8-2fbf15ecc
     restart: unless-stopped
