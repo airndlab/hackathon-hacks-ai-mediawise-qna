@@ -415,6 +415,7 @@ def extract_context_from_pdf(pdf_path: str) -> str:
         return 'Error extracting context'
 
 def do_reindex():
+    logger.info("Reindexing")
     orgs_dirs = Path(MAIN_DOCS_DIR)
     for org_dir in orgs_dirs.iterdir():
         if org_dir.is_dir():
