@@ -22,7 +22,7 @@ services:
     command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --device cuda
 
   rag:
-    image: airndlab/mediawise-rag:2024.11.20-16-20
+    image: airndlab/mediawise-rag:2024.11.20-17-36
     restart: unless-stopped
     depends_on:
       - vllm
@@ -34,6 +34,7 @@ services:
               device_ids: [ '0' ]
               capabilities: [ gpu ]
     volumes:
+      - ~/.cache/huggingface:~/.cache/huggingface
       - ./config:/config
       - ./dataset:/data/dataset
       - ./index:/data/index
