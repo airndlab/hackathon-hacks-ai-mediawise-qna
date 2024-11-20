@@ -22,7 +22,7 @@ services:
     command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --max-model-len 32000 --dtype half --quantization gptq --gpu_memory_utilization 0.75 --device cuda
 
   rag:
-    image: airndlab/mediawise-rag:2024.11.20-10-49
+    image: airndlab/mediawise-rag:2024.11.20-16-20
     restart: unless-stopped
     depends_on:
       - vllm
