@@ -45,9 +45,7 @@ from PIL import Image
 import logging
 import pickle
 
-logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
 haystack_logger = logging.getLogger("haystack")
-haystack_logger.setLevel(logging.INFO)
 
 tracing.tracer.is_content_tracing_enabled = True
 tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
