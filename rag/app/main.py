@@ -1,9 +1,8 @@
 import logging
 import sys
-from pathlib import Path
-
 import uvicorn
 from fastapi import FastAPI
+from pathlib import Path
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -11,13 +10,13 @@ if __name__ == "__main__":
     env_path = Path('../../.env')
     load_dotenv(dotenv_path=env_path)
 
-from app import api, hook
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
+
+from app import api, hook
 
 logger = logging.getLogger(__name__)
 
