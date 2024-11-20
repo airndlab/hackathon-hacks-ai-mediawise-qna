@@ -23,4 +23,4 @@ embedding_retriever:
   top_k: 3
 
 document_joiner:
-  top_k: 6
+  top_k: 4

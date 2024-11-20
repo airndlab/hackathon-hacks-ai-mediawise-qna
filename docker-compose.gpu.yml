@@ -14,12 +14,44 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - 8000:8000
+      - 8000
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
     networks:
       - mwgpu-net
-    command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --device cuda
+    command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --max-model-len 32000 --dtype half --quantization gptq --gpu_memory_utilization 0.75 --device cuda
+
+  rag:
+    image: airndlab/mediawise-rag:2024.11.20-10-49
+    restart: unless-stopped
+    depends_on:
+      - vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [ gpu ]
+    volumes:
+      - ./config:/config
+      - ./dataset:/data/dataset
+      - ./data:/data/store
+    environment:
+      - VLLM_URL=http://vllm:8000/v1
+      - CHROMA_HOSTNAME=158.160.68.33
+      - CHROMA_PORT=8000
+      - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
+      - MAIN_DOCS_DIR=/data/dataset
+      - DOCUMENT_STORES_DIR=/data/store
+      - PROMPTS_CONFIG_PATH=/config/prompts.yaml
+      - DICTS_CONFIG_PATH=/config/dicts.yaml
+      - RAG_CONFIG_PATH=/config/rag.yaml
+      - API_CONFIG_PATH=/config/api.yaml
+    ports:
+      - 8080
+    networks:
+      - mwgpu-net
 
 networks:
   mwgpu-net:
