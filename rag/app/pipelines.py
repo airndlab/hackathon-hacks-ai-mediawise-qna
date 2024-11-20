@@ -80,6 +80,8 @@ overlap = split_function_config.get("overlap", 0)
 rag_gen_kwargs = rag_config.get("rag_gen_kwargs", {})
 json_gen_kwargs = rag_config.get("json_gen_kwargs", {})
 
+document_joiner_threshold = rag_config.get("document_joiner", {}).get("threshold", 0.4)
+
 # API CONFIG
 API_CONFIG_PATH = os.getenv("API_CONFIG_PATH")
 with open(API_CONFIG_PATH, "r", encoding='utf-8') as config_file:
@@ -330,7 +332,12 @@ def load_documents_to_store(document_store, document_store_name: str):
 
 document_store = create_in_memory_document_store()
 
-load_documents_to_store(document_store, "test_3_document_store")
+document_store_config = rag_config.get("document_store", {})
+
+if document_store_config.get("reindex"):
+  do_reindex()
+else:
+  load_documents_to_store(document_store, document_store_config.get("load_path"))
 
 indexing_pipeline = create_indexing_pipeline(document_store = document_store)
 
@@ -623,7 +630,7 @@ def get_chat_response(
             Reference(
                 filename=doc.meta.get('filename', ''),
                 page_number=int(doc.meta.get('page_number')) if doc.meta.get('page_number') is not None else 0
-            ) for doc in documents
+            ) for doc in documents if doc.score > document_joiner_threshold
         ]
     except Exception as e:
         logger.warn(f"Ошибка при формировании references из документов: {e}")
@@ -656,6 +663,7 @@ def get_chat_response(
 
     if "Я не знаю ответа на ваш вопрос" in response_text:
         response_text = "Я не знаю ответа на ваш вопрос"
+        references = None
 
     gc.collect()
     torch.cuda.empty_cache()
