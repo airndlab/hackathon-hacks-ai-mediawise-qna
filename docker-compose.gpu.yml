@@ -34,6 +34,7 @@ services:
               device_ids: [ '0' ]
               capabilities: [ gpu ]
     volumes:
+      -
       - ~/.cache/huggingface:~/.cache/huggingface
       - ./config:/config
       - ./dataset:/data/dataset
