@@ -24,3 +24,9 @@ embedding_retriever:
 
 document_joiner:
   top_k: 4
+
+document_store:
+  reindex: false
+  load_path: "main_document_store"
+
+
