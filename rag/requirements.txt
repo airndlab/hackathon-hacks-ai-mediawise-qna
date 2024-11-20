@@ -189,7 +189,6 @@ PyPDF2==3.0.1
 PyPika==0.48.9
 pyproject_hooks==1.2.0
 pysbd==0.3.4
-python-apt==2.4.0+ubuntu4
 python-dateutil==2.8.2
 python-docx==1.1.2
 python-dotenv==1.0.1
