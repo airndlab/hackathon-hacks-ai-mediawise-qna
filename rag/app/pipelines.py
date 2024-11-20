@@ -6,46 +6,37 @@ from haystack.components.routers import FileTypeRouter
 from haystack.components.joiners import DocumentJoiner
 from haystack_integrations.document_stores.chroma import ChromaDocumentStore
 from haystack.document_stores.in_memory import InMemoryDocumentStore
-from haystack_integrations.components.retrievers.chroma import ChromaEmbeddingRetriever
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.writers import DocumentWriter
 from haystack.utils import ComponentDevice, Device, Secret
 from haystack.components.retrievers.in_memory import InMemoryEmbeddingRetriever, InMemoryBM25Retriever
 from haystack.components.embedders import SentenceTransformersTextEmbedder
 from haystack.components.generators.chat import OpenAIChatGenerator
-from haystack.dataclasses import ChatMessage, ChatRole
+from haystack.dataclasses import ChatMessage
 from haystack.components.builders import ChatPromptBuilder
 from haystack.tracing.logging_tracer import LoggingTracer
 
 from pathlib import Path
-from pprint import pprint
 
 import yaml
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 from PyPDF2 import PdfReader
 
 import gc
 import io
 import torch
-import re
 import json
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Union
-from jinja2 import Template
 
 import os
 import time
-import pandas as pd
 
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
-
-from PIL import Image
 import logging
 import pickle
 
-haystack_logger = logging.getLogger("haystack")
+logger = logging.getLogger(__name__)
 
 tracing.tracer.is_content_tracing_enabled = True
 tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
@@ -158,7 +149,7 @@ class QueryExpander:
                 expanded_queries = json.loads(json_str)
 
             except Exception as e:
-                print(e)
+                logger.warn(e)
                 return {"queries": [query]}
 
         expanded_queries.append(query)
@@ -195,7 +186,7 @@ class MultiQueryInMemoryRetriever:
 
     def add_document(self, document: Document):
         if (document.id not in self.ids) and (document.score > self.score_threshold):
-            haystack_logger.info(f"Embed: Adding document with score {document.score}")
+            logger.info(f"Embed: Adding document with score {document.score}")
             self.results.append(document)
             self.ids.add(document.id)
 
@@ -226,7 +217,7 @@ class MultiQueryInMemoryBM25Retriever:
 
     def add_document(self, document: Document):
         if (document.id not in self.ids) and (document.score > self.score_threshold):
-            haystack_logger.info(f"BM25: Adding document with score {document.score}")
+            logger.info(f"BM25: Adding document with score {document.score}")
             self.results.append(document)
             self.ids.add(document.id)
 
@@ -394,12 +385,12 @@ def generate_summarization(document_content):
             json_str = response_text[first_brace:last_brace + 1]
             response_dict = json.loads(json_str)
         else:
-            print("Error: JSON structure not found in response.")
+            logger.warn("Error: JSON structure not found in response.")
             return {}
 
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
-        print(f"Attempted JSON string: {json_str}")
+        logger.warn(f"Error parsing JSON response: {e}")
+        logger.warn(f"Attempted JSON string: {json_str}")
         return {}
 
     return response_dict
@@ -420,7 +411,7 @@ def extract_context_from_pdf(pdf_path: str) -> str:
             return context.strip() if context else "No text extracted from the first three pages."
 
     except Exception as e:
-        print(f"An error occurred while extracting context from '{pdf_path}': {e}")
+        logger.warn(f"An error occurred while extracting context from '{pdf_path}': {e}")
         return 'Error extracting context'
 
 def do_reindex():
@@ -634,7 +625,7 @@ def get_chat_response(
             ) for doc in documents
         ]
     except Exception as e:
-        print(f"Ошибка при формировании references из документов: {e}")
+        logger.warn(f"Ошибка при формировании references из документов: {e}")
 
     try:
         # Находим индекс последнего символа ']'
@@ -650,9 +641,9 @@ def get_chat_response(
                     references = [Reference(**item) for item in references_list]
                     response_text = response_text[:first_bracket_idx].strip()
                 except json.JSONDecodeError as e:
-                    print(f"Ошибка при парсинге JSON: {e}")
+                    logger.warn(f"Ошибка при парсинге JSON: {e}")
     except Exception as e:
-        print(f"Общая ошибка при обработке ответа: {e}")
+        logger.warn(f"Общая ошибка при обработке ответа: {e}")
 
     if references and document_joiner_references:
         for doc_joiner_ref in document_joiner_references:
@@ -722,7 +713,7 @@ def model_response_to_json(
 
                 sources.append(source)
             else:
-                print(f"Документ не найден для filename: {ref.filename}, page_number: {ref.page_number}")
+                logger.warn(f"Документ не найден для filename: {ref.filename}, page_number: {ref.page_number}")
 
     # Формирование итогового JSON
     json_output = {
@@ -802,9 +793,9 @@ def generate_related_questions(conversational: List[List[Union[str, str]]]) -> L
                     if isinstance(questions_list, list) and all(isinstance(item, str) for item in questions_list):
                         questions = questions_list
                 except json.JSONDecodeError as e:
-                    print(f"JSON parsing error: {e}")
+                    logger.warn(f"JSON parsing error: {e}")
     except Exception as e:
-        print(f"General error processing response: {e}")
+        logger.warn(f"General error processing response: {e}")
 
     # Возвращаем распарсенные вопросы или пустой список при ошибке
     return questions
@@ -825,13 +816,12 @@ def generate_submission_csv(input_csv: str, output_csv: str):
     try:
         df = pd.read_csv(input_csv, dtype={'question': str, 'filename': str, 'slide_number': str})
     except Exception as e:
-        print(f"Ошибка при чтении файла CSV: {e}")
+        logger.warn(f"Ошибка при чтении файла CSV: {e}")
         return
 
     # Проверка наличия столбца question
     if 'question' not in df.columns:
-        print(df.columns)
-        print("Отсутствует необходимый столбец: question")
+        logger.warn(f"Отсутствует необходимый столбец: question\n{df.columns}")
         return
 
     # Добавление колонки answer, если ее нет
@@ -850,7 +840,6 @@ def generate_submission_csv(input_csv: str, output_csv: str):
             df.at[index, 'slide_number'] = slide_number
             # df.at[index, 'answer'] = "Я не знаю ответа на ваш вопрос"
             continue
-        print(question, filename)
         # Получение ответа от модели с передачей question и filename
         model_response = get_chat_response(question, filename=filename)
 
@@ -879,9 +868,9 @@ def generate_submission_csv(input_csv: str, output_csv: str):
     # Запись обновленного DataFrame в CSV-файл
     try:
         df.to_csv(output_csv, index=False, encoding='utf-8')
-        print(f"Файл успешно сохранен как {output_csv}")
+        logger.info(f"Файл успешно сохранен как {output_csv}")
     except Exception as e:
-        print(f"Ошибка при записи файла CSV: {e}")
+        logger.warn(f"Ошибка при записи файла CSV: {e}")
 
 def get_eval_response(
         question: str,
@@ -914,9 +903,9 @@ def get_eval_response(
                     references = [Reference(**item) for item in references_list]
                     response_text = response_text[:first_bracket_idx].strip()
                 except json.JSONDecodeError as e:
-                    print(f"Ошибка при парсинге JSON: {e}")
+                    logger.warn(f"Ошибка при парсинге JSON: {e}")
     except Exception as e:
-        print(f"Общая ошибка при обработке ответа: {e}")
+        logger.warn(f"Общая ошибка при обработке ответа: {e}")
 
     gc.collect()
     torch.cuda.empty_cache()
@@ -968,19 +957,19 @@ def add_rag_responses_to_csv(
     # Чтение CSV-файла
     try:
         df = pd.read_csv(input_path)
-        print(f"Файл {input_path} успешно прочитан.")
+        logger.info(f"Файл {input_path} успешно прочитан.")
     except FileNotFoundError:
-        print(f"Файл {input_path} не найден.")
+        logger.warn(f"Файл {input_path} не найден.")
         return
     except Exception as e:
-        print(f"Ошибка при чтении файла {input_path}: {e}")
+        logger.warn(f"Ошибка при чтении файла {input_path}: {e}")
         return
 
     # Проверка наличия необходимых колонок
     required_columns = ["questions", "ground_truth_documents", "filename", "slide_number", "ground_truth"]
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
-        print(f"Входной файл не содержит следующие необходимые колонки: {missing_columns}")
+        logger.warn(f"Входной файл не содержит следующие необходимые колонки: {missing_columns}")
         return
 
     responses = []
@@ -993,7 +982,7 @@ def add_rag_responses_to_csv(
         question = row["questions"]
 
         if pd.isna(question) or question.strip() == "":
-            print(f"Строка {index}: Вопрос пуст. Пропуск.")
+            logger.info(f"Строка {index}: Вопрос пуст. Пропуск.")
             responses.append("")
             r_filenames.append("")
             r_slide_numbers.append("")
@@ -1010,7 +999,7 @@ def add_rag_responses_to_csv(
             contexts = response_dict.get("contexts", [])
             contexts_list.append(contexts)
         except Exception as e:
-            print(f"Строка {index}: Ошибка при получении ответа: {e}")
+            logger.warn(f"Строка {index}: Ошибка при получении ответа: {e}")
             responses.append("")
             r_filenames.append("")
             r_slide_numbers.append("")
@@ -1043,9 +1032,9 @@ def add_rag_responses_to_csv(
     # Сохранение DataFrame в CSV
     try:
         df.to_csv(output_path, index=False, encoding='utf-8')
-        print(f"Результаты успешно сохранены в {output_path}")
+        logger.info(f"Результаты успешно сохранены в {output_path}")
     except Exception as e:
-        print(f"Ошибка при записи файла CSV: {e}")
+        logger.warn(f"Ошибка при записи файла CSV: {e}")
 
     return df
 
@@ -1133,7 +1122,7 @@ def generator_poll():
         return
 
     # Извлечение необходимых данных из ответа
-    print(response_data)
+    logger.info(response_data)
     request_id = response_data.get("requestId")
     question = response_data.get("query")
 
