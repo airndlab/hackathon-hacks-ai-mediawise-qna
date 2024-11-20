@@ -36,14 +36,14 @@ services:
     volumes:
       - ./config:/config
       - ./dataset:/data/dataset
-      - ./data:/data/store
+      - ./index:/data/index
     environment:
       - VLLM_URL=http://vllm:8000/v1
       - CHROMA_HOSTNAME=158.160.68.33
       - CHROMA_PORT=8000
       - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
       - MAIN_DOCS_DIR=/data/dataset
-      - DOCUMENT_STORES_DIR=/data/store
+      - DOCUMENT_STORES_DIR=/data/index
       - PROMPTS_CONFIG_PATH=/config/prompts.yaml
       - DICTS_CONFIG_PATH=/config/dicts.yaml
       - RAG_CONFIG_PATH=/config/rag.yaml
