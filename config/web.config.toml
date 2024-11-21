@@ -1,8 +1,5 @@
 [GENERAL]
 PORT = 3001 # Port to run the server on
-
-[GENERAL]
-PORT = 3001 # Port to run the server on
 SIMILARITY_MEASURE = "cosine" # "cosine" or "dot"
 
 [API_KEYS]
