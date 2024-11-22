@@ -19,6 +19,7 @@ services:
       - ~/.cache/huggingface:/root/.cache/huggingface
     networks:
       - mwgpu-net
+      - shared-net
     command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --device cuda
 
   rag:
@@ -56,3 +57,5 @@ services:
 
 networks:
   mwgpu-net:
+  shared-net:
+    external: true
