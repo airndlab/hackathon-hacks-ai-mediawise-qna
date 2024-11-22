@@ -29,7 +29,7 @@ services:
       - mw-net
 
   perplexica-frontend:
-    image: airndlab/perplexica-frontend:2024.11.22-11-29
+    image: airndlab/perplexica-frontend:2024.11.22-12-22
     restart: unless-stopped
     depends_on:
       - perplexica-backend
