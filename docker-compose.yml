@@ -12,7 +12,7 @@ services:
       - mw-net
 
   perplexica-backend:
-    image: airndlab/perplexica-backend:2024.11.22-07-11
+    image: airndlab/perplexica-backend:2024.11.22-09-37
     restart: unless-stopped
     depends_on:
       - searxng
