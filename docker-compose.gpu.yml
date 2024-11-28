@@ -51,7 +51,7 @@ services:
       - RAG_CONFIG_PATH=/config/rag.yaml
       - API_CONFIG_PATH=/config/api.yaml
     ports:
-      - 8080
+      - 8080:8080
     networks:
       - mwgpu-net
 
