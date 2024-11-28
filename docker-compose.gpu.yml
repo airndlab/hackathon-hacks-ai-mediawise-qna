@@ -23,7 +23,7 @@ services:
     command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --device cuda
 
   rag:
-    image: airndlab/mediawise-rag:2024.11.20-18-15
+    image: airndlab/mediawise-rag:2024.11.28-10-07
     restart: unless-stopped
     depends_on:
       - vllm
