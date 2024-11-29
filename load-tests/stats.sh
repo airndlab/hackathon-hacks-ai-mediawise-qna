@@ -16,13 +16,11 @@ function get_docker_stats {
   awk -F "," '{gsub(/MiB|GiB|%/,"",$3); print $1","$2","$3}'
 }
 
-# Запуск тестов в фоновом режиме
-echo "Запуск тестов..."
-k6 run --vus 10 --duration 30s test.js &  # Запустите ваш тест
-TEST_PID=$!
+# Выводим сообщение о запуске
+echo "Запуск бесконечного мониторинга ресурсов (Ctrl+C для завершения)..."
 
-# Цикл сбора метрик каждые 2 секунды
-while kill -0 $TEST_PID 2>/dev/null; do
+# Бесконечный цикл
+while true; do
   TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 
   # Сбор метрик контейнеров
@@ -36,7 +34,5 @@ while kill -0 $TEST_PID 2>/dev/null; do
     done
   done < <(get_docker_stats)
 
-  sleep 2
+  sleep 2  # Интервал сбора метрик
 done
-
-echo "Тесты завершены. Метрики сохранены в $OUTPUT_FILE"
