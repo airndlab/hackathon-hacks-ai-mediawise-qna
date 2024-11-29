@@ -49,6 +49,7 @@ services:
       - DICTS_CONFIG_PATH=/config/dicts.yaml
       - RAG_CONFIG_PATH=/config/rag.yaml
       - API_CONFIG_PATH=/config/api.yaml
+      - POOLING_ENABLED=${POOLING_ENABLED}
     ports:
       - 8080:8080
     networks:
