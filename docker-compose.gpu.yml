@@ -24,7 +24,6 @@ services:
 
   rag:
     image: airndlab/mediawise-rag:2024.11.28-10-07
-    restart: unless-stopped
     depends_on:
       - vllm
     deploy:
