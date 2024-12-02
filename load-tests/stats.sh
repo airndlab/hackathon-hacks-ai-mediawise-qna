@@ -1,7 +1,9 @@
 #!/bin/bash
 
+mkdir -p reports
+
 # Файл для вывода
-OUTPUT_FILE="resource_usage.csv"
+OUTPUT_FILE="reports/stats.csv"
 
 # Создать CSV файл с заголовками, если его нет
 if [ ! -f "$OUTPUT_FILE" ]; then
