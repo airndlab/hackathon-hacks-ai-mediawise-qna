@@ -1,4 +1,4 @@
-model: Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4
+model: Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4
 embedding_model: deepvk/USER-bge-m3
 cross_encoder_model: qilowoq/bge-reranker-v2-m3-en-ru
 

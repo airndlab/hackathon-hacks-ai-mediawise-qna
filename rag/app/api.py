@@ -4,8 +4,6 @@ from typing import Optional, List, Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from haystack import Document
-
 
 PIPELINE_TYPE = os.getenv("PIPELINE_TYPE")
 
@@ -26,7 +24,7 @@ class AnswerResponse(BaseModel):
 
 
 class RetrieveResponse(BaseModel):
-    documents: Optional[List[Document]] = []
+    documents: Optional[List[Any]] = []
 
 if PIPELINE_TYPE == "LLM":
     @router.post("/asking")
