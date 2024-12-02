@@ -1,0 +1,10 @@
+{
+  "name": "load-tests",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "k6 run script.js"
+  },
+  "devDependencies": {
+    "k6": "^0.0.0"
+  }
+}

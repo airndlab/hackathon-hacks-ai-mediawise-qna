@@ -1,0 +1,6 @@
+POST http://158.160.85.147:8080/asking
+Content-Type: application/json
+
+{
+  "question": "Какие есть подкасты?"
+}
