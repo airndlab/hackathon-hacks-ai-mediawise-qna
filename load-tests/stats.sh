@@ -34,5 +34,5 @@ while true; do
     done
   done < <(get_docker_stats)
 
-  sleep 2  # Интервал сбора метрик
+  sleep 5  # Интервал сбора метрик
 done
