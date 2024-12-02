@@ -53,7 +53,7 @@ if PIPELINE_TYPE == "LLM":
             filename = request.filename,
         )
 
-        return RetrieveResponse(retrieved_documents)
+        return RetrieveResponse(documents=retrieved_documents)
 
 
     @router.post("/base_retrieve")
@@ -66,7 +66,7 @@ if PIPELINE_TYPE == "LLM":
             filename = request.filename,
         )
 
-        return RetrieveResponse(retrieved_documents)
+        return RetrieveResponse(documents=retrieved_documents)
 
 
     @router.post("/full_retrieve")
@@ -79,7 +79,7 @@ if PIPELINE_TYPE == "LLM":
             filename = request.filename,
         )
 
-        return RetrieveResponse(retrieved_documents)
+        return RetrieveResponse(documents=retrieved_documents)
 
 elif PIPELINE_TYPE == "VLM":
     @router.post("/asking")
