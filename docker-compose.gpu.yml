@@ -43,33 +43,11 @@ services:
       - shared-net
     command: --model deepvk/USER-bge-m3 --task embedding  --device cuda
 
-  vllm_ranker:
-    image: vllm/vllm-openai:v0.6.3
-    ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ '0' ]
-              capabilities: [ gpu ]
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    ports:
-      - 8002:8000
-    volumes:
-      - ~/.cache/huggingface:/root/.cache/huggingface
-    networks:
-      - mwgpu-net
-      - shared-net
-    command: --model qilowoq/bge-reranker-v2-m3-en-ru --device cuda
-
   rag:
     image: airndlab/mediawise-rag:2024.12.02-09-51
     depends_on:
       - vllm
       - vllm_embedding
-      - vllm_ranker
     deploy:
       resources:
         reservations:
@@ -85,8 +63,9 @@ services:
     environment:
       - VLLM_URL=http://vllm:8000/v1
       - VLLM_EMBEDDING_URL=http://vllm_embedding:8000/v1
-      - VLLM_RERANKER_URL=http://vllm_ranker:8000/v1
+      - PIPELINE_TYPE=LLM
       - CHROMA_HOSTNAME=158.160.68.33
+      - PIPELINE_TYPE=LLM
       - CHROMA_PORT=8000
       - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
       - MAIN_DOCS_DIR=/data/dataset

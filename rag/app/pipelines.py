@@ -25,6 +25,7 @@ from haystack.components.joiners import DocumentJoiner
 from haystack.components.preprocessors import DocumentSplitter, DocumentCleaner
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
 from haystack.components.retrievers.in_memory import InMemoryEmbeddingRetriever, InMemoryBM25Retriever
+from haystack.components.rankers import TransformersSimilarityRanker
 from haystack.components.routers import FileTypeRouter
 from haystack.components.writers import DocumentWriter
 from haystack.dataclasses import ChatMessage
@@ -46,7 +47,6 @@ else:
 
 VLLM_URL = os.getenv("VLLM_URL")
 VLLM_EMBEDDING_URL = os.getenv("VLLM_EMBEDDING_URL")
-VLLM_RERANKER_URL = os.getenv("VLLM_RERANKER_URL")
 
 CHROMA_HOSTNAME = os.getenv("CHROMA_HOSTNAME")
 CHROMA_PORT = os.getenv("CHROMA_PORT")
@@ -243,106 +243,6 @@ class MultiQueryInMemoryBM25Retriever:
         self.results.sort(key=lambda x: x.score, reverse=True)
 
         return {"documents": self.results}
-
-@component
-class CustomOpenAIApiRanker:
-    def __init__(
-        self,
-        model: Union[str, Path],
-        api_base_url: str,
-        top_k: int = 10,
-        query_prefix: str = "",
-        document_prefix: str = "",
-        meta_fields_to_embed: Optional[List[str]] = None,
-        embedding_separator: str = "\n",
-        score_threshold: Optional[float] = None,
-        ):
-        self.model = model
-        self.api_base_url = api_base_url
-        self.top_k = top_k
-
-        self.query_prefix = query_prefix
-        self.document_prefix = document_prefix
-        self.meta_fields_to_embed = meta_fields_to_embed or []
-        self.embedding_separator = embedding_separator
-        self.score_threshold = score_threshold
-
-        if self.top_k <= 0:
-            raise ValueError(f"top_k must be > 0, but got {top_k}")
-
-
-    def _get_similarity_score(self, text_1: str, text_2: List[str]) -> Optional[Dict[str, Any]]:
-        """
-        Внутренний метод для отправки запроса на API и получения оценки сходства.
-        """
-        url = f'{self.api_base_url}/score'
-
-        # Заголовки для запроса
-        headers = {
-            'accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-
-        # Данные для отправки
-        data = {
-            'model': self.model,
-            'text_1': text_1,
-            'text_2': text_2
-        }
-
-        try:
-            response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()  # Выкидывает исключение, если статус не 200
-
-            return response.json()  # Преобразуем ответ в JSON
-        except requests.exceptions.RequestException as e:
-            print(f"Error during API request: {e}")
-            return None
-
-
-    @component.output_types(documents=List[Document])
-    def run(
-        self,
-        query: str,
-        documents: List[Document],
-        top_k: Optional[int] = None,
-        score_threshold: Optional[float] = None,
-        ):
-      if not documents:
-          return {"documents": []}
-
-      top_k = top_k or self.top_k
-
-      score_threshold = score_threshold or self.score_threshold
-
-      if top_k <= 0:
-          raise ValueError(f"top_k must be > 0, but got {top_k}")
-
-      final_documents = []
-      for doc in documents:
-          meta_values_to_embed = [
-              str(doc.meta[key]) for key in self.meta_fields_to_embed if key in doc.meta and doc.meta[key]
-          ]
-          text_to_embed = self.embedding_separator.join(meta_values_to_embed + [doc.content or ""])
-          final_documents.append(self.document_prefix + text_to_embed)
-
-      response = self._get_similarity_score(query, final_documents)
-
-      scores = response['data']
-
-      for score_data in scores:
-          index = score_data['index']
-          score = score_data['score'][0]
-          documents[index].score = score
-
-      sorted_documents = sorted(documents, key=lambda doc: doc.score, reverse=True)
-
-      if score_threshold is not None:
-          sorted_documents = [doc for doc in sorted_documents if doc.score >= score_threshold]
-
-      ranked_docs = sorted_documents[:top_k]
-
-      return {"documents": ranked_docs}
 
 
 def create_in_memory_document_store():
@@ -644,6 +544,7 @@ def find_manual_summary_documents():
 
     return manual_summary_docs
 
+
 def create_rag_pipeline(
     document_store,
     ) -> Pipeline:
@@ -664,9 +565,8 @@ def create_rag_pipeline(
 
   document_joiner = DocumentJoiner(top_k = rag_config.get("document_joiner").get("top_k", 4), join_mode = "distribution_based_rank_fusion")
 
-  cross_encoder = CustomOpenAIApiRanker(
+  cross_encoder = TransformersSimilarityRanker(
       model = cross_encoder_model,
-      api_base_url = VLLM_RERANKER_URL,
       top_k = cross_encoder_config.get("top_k", 4),
       score_threshold = cross_encoder_config.get("threshold", 0.0),
       )
@@ -697,6 +597,7 @@ def create_rag_pipeline(
   rag_pipeline.connect("final_answer_prompt_builder", "final_answer_llm")
 
   return rag_pipeline
+
 
 rag_pipeline = create_rag_pipeline(document_store = document_store)
 
@@ -980,12 +881,11 @@ def create_retrieval_pipeline(document_store, use_ranker=False, use_query_expand
 
     # Условно добавляем ранкер
     if use_ranker:
-        cross_encoder = CustomOpenAIApiRanker(
-            model=cross_encoder_model,
-            api_base_url=VLLM_RERANKER_URL,
-            top_k=cross_encoder_config.get("top_k", 4),
-            score_threshold=cross_encoder_config.get("threshold", 0.0),
-        )
+        cross_encoder = TransformersSimilarityRanker(
+          model = cross_encoder_model,
+          top_k = cross_encoder_config.get("top_k", 4),
+          score_threshold = cross_encoder_config.get("threshold", 0.0),
+      )
         pipeline.add_component("cross_encoder", cross_encoder)
         pipeline.connect("document_joiner", "cross_encoder")
 
@@ -1004,8 +904,10 @@ def create_retrieval_pipeline(document_store, use_ranker=False, use_query_expand
 
 
 simple_retrieval_pipeline = create_retrieval_pipeline(document_store)
-base_retrieval_pipeline = create_retrieval_pipeline(document_store, use_ranker=True)
-full_retrieval_pipeline = create_retrieval_pipeline(document_store, use_ranker = True, use_query_expander=True)
+# base_retrieval_pipeline = create_retrieval_pipeline(document_store, use_ranker=True)
+# full_retrieval_pipeline = create_retrieval_pipeline(document_store, use_ranker = True, use_query_expander=True)
+base_retrieval_pipeline = create_retrieval_pipeline(document_store)
+full_retrieval_pipeline = create_retrieval_pipeline(document_store)
 
 
 def run_simple_retrieval(

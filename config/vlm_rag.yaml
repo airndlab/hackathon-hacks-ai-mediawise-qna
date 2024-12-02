@@ -1,0 +1,8 @@
+vlm_model: Qwen/Qwen2-VL-7B-Instruct-GPTQ-Int4
+colvision_model: vidore/colpali-v1.2
+
+vlm_top_k: 1
+
+index:
+  reindex: false
+  name: "main_index"
