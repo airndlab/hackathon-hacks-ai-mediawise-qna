@@ -9,7 +9,7 @@ if [ ! -f "$OUTPUT_FILE" ]; then
 fi
 
 # Интервал записи данных (в секундах)
-INTERVAL=5
+INTERVAL=1
 
 while true; do
   # Текущая дата и время
