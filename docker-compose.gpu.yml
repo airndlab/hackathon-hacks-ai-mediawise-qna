@@ -2,7 +2,7 @@ name: mwgpu
 
 services:
   vllm:
-    image: vllm/vllm-openai:v0.6.3
+    image: vllm/vllm-openai:v0.6.4
     ipc: host
     deploy:
       resources:
@@ -23,7 +23,7 @@ services:
     command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --gpu-memory-utilization 0.8 --device cuda
 
   vllm_embedding:
-    image: vllm/vllm-openai:v0.6.3
+    image: vllm/vllm-openai:v0.6.4
     ipc: host
     deploy:
       resources:
@@ -41,10 +41,10 @@ services:
     networks:
       - mwgpu-net
       - shared-net
-    command: --model deepvk/USER-bge-m3 --device cuda
+    command: --model deepvk/USER-bge-m3 --task embedding --device cuda
 
   vllm_ranker:
-    image: vllm/vllm-openai:v0.6.3
+    image: vllm/vllm-openai:v0.6.4
     ipc: host
     deploy:
       resources:
