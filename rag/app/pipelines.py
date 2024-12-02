@@ -164,20 +164,23 @@ class QueryExpander:
 
 @component
 class MultiQueryTextEmbedder:
-    def __init__(self, embedder, top_k: int = 1):
+    def __init__(self, embedder , top_k: int = 1):
         self.embedder = embedder
-        self.embedder.warm_up()
+        try:
+          self.embedder.warm_up()
+        except AttributeError as e:
+          print("У вашего Text Embedder'a нет метода warm_up()")
         self.results = []
         self.ids = set()
         self.top_k = top_k
 
     @component.output_types(embeddings=List[List[str]])
     def run(self, queries: List[str]):
-        self.results = []
-        for query in queries:
-            self.results.append(self.embedder.run(query))
+      self.results = []
+      for query in queries:
+        self.results.append(self.embedder.run(query))
 
-        return {"embeddings": self.results}
+      return {"embeddings": self.results}
 
 @component
 class MultiQueryInMemoryRetriever:
