@@ -65,7 +65,7 @@ services:
     command: --model qilowoq/bge-reranker-v2-m3-en-ru --device cuda
 
   rag:
-    image: airndlab/mediawise-rag:2024.11.28-10-07
+    image: airndlab/mediawise-rag:2024.12.02-09-51
     depends_on:
       - vllm
       - vllm_embedding
