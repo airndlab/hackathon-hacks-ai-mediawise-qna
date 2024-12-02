@@ -84,8 +84,8 @@ services:
       - ./index:/data/index
     environment:
       - VLLM_URL=http://vllm:8000/v1
-      - VLLM_EMBEDDING_URL=http://vllm:8001/v1
-      - VLLM_RERANKER_URL=http://vllm:8002/v1
+      - VLLM_EMBEDDING_URL=http://vllm_embedding:8001/v1
+      - VLLM_RERANKER_URL=http://vllm_ranker:8002/v1
       - CHROMA_HOSTNAME=158.160.68.33
       - CHROMA_PORT=8000
       - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
