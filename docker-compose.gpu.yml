@@ -64,6 +64,7 @@ services:
       - VLLM_URL=http://vllm:8000/v1
       - VLLM_EMBEDDING_URL=http://vllm_embedding:8000/v1
       - CHROMA_HOSTNAME=158.160.68.33
+      - PIPELINE_TYPE=LLM
       - CHROMA_PORT=8000
       - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
       - MAIN_DOCS_DIR=/data/dataset
