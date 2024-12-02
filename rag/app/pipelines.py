@@ -1,40 +1,38 @@
-from haystack import Pipeline, Document, component, tracing
-from haystack.components.converters import PyPDFToDocument, DOCXToDocument, PPTXToDocument
-from haystack.components.converters.csv import CSVToDocument
-from haystack.components.preprocessors import DocumentSplitter, DocumentCleaner
-from haystack.components.routers import FileTypeRouter
-from haystack.components.joiners import DocumentJoiner
-from haystack_integrations.document_stores.chroma import ChromaDocumentStore
-from haystack.document_stores.in_memory import InMemoryDocumentStore
-from haystack.components.embedders import SentenceTransformersDocumentEmbedder
-from haystack.components.writers import DocumentWriter
-from haystack.utils import ComponentDevice, Device, Secret
-from haystack.components.retrievers.in_memory import InMemoryEmbeddingRetriever, InMemoryBM25Retriever
-from haystack.components.embedders import SentenceTransformersTextEmbedder
-from haystack.components.generators.chat import OpenAIChatGenerator
-from haystack.dataclasses import ChatMessage
-from haystack.components.builders import ChatPromptBuilder
-from haystack.tracing.logging_tracer import LoggingTracer
-
-from pathlib import Path
-
-import yaml
-import requests
-from datetime import datetime
-from PyPDF2 import PdfReader
-
 import gc
 import io
-import torch
 import json
-from pydantic import BaseModel
+import logging
+import pandas as pd
+import os
+import pickle
+import time
+from datetime import datetime
+from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 
-import os
-import time
+from tqdm import tqdm
 
-import logging
-import pickle
+import requests
+import torch
+import yaml
+from PyPDF2 import PdfReader
+from haystack import Pipeline, Document, component, tracing
+from haystack.components.builders import ChatPromptBuilder
+from haystack.components.converters import PyPDFToDocument, DOCXToDocument, PPTXToDocument
+from haystack.components.converters.csv import CSVToDocument
+from haystack.components.generators.chat import OpenAIChatGenerator
+from haystack.components.joiners import DocumentJoiner
+from haystack.components.preprocessors import DocumentSplitter, DocumentCleaner
+from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
+from haystack.components.retrievers.in_memory import InMemoryEmbeddingRetriever, InMemoryBM25Retriever
+from haystack.components.routers import FileTypeRouter
+from haystack.components.writers import DocumentWriter
+from haystack.dataclasses import ChatMessage
+from haystack.document_stores.in_memory import InMemoryDocumentStore
+from haystack.tracing.logging_tracer import LoggingTracer
+from haystack.utils import ComponentDevice, Device, Secret
+from haystack_integrations.document_stores.chroma import ChromaDocumentStore
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +45,9 @@ else:
     device = ComponentDevice.from_single(Device.cpu())
 
 VLLM_URL = os.getenv("VLLM_URL")
+VLLM_EMBEDDING_URL = os.getenv("VLLM_EMBEDDING_URL")
+VLLM_RERANKER_URL = os.getenv("VLLM_RERANKER_URL")
+
 CHROMA_HOSTNAME = os.getenv("CHROMA_HOSTNAME")
 CHROMA_PORT = os.getenv("CHROMA_PORT")
 
@@ -72,6 +73,9 @@ with open(RAG_CONFIG_PATH, "r") as file:
 
 model = rag_config.get("model")
 embedding_model = rag_config.get("embedding_model")
+cross_encoder_model = rag_config.get("cross_encoder_model")
+
+cross_encoder_config = rag_config.get("cross_encoder", {})
 
 split_function_config = rag_config.get("split_function", {})
 max_chunk_size = split_function_config.get("max_chunk_size", 300)
@@ -160,7 +164,7 @@ class QueryExpander:
 
 @component
 class MultiQueryTextEmbedder:
-    def __init__(self, embedder: SentenceTransformersTextEmbedder, top_k: int = 1):
+    def __init__(self, embedder, top_k: int = 1):
         self.embedder = embedder
         self.embedder.warm_up()
         self.results = []
@@ -240,6 +244,107 @@ class MultiQueryInMemoryBM25Retriever:
 
         return {"documents": self.results}
 
+@component
+class CustomOpenAIApiRanker:
+    def __init__(
+        self,
+        model: Union[str, Path],
+        api_base_url: str,
+        top_k: int = 10,
+        query_prefix: str = "",
+        document_prefix: str = "",
+        meta_fields_to_embed: Optional[List[str]] = None,
+        embedding_separator: str = "\n",
+        score_threshold: Optional[float] = None,
+        ):
+        self.model = model
+        self.api_base_url = api_base_url
+        self.top_k = top_k
+
+        self.query_prefix = query_prefix
+        self.document_prefix = document_prefix
+        self.meta_fields_to_embed = meta_fields_to_embed or []
+        self.embedding_separator = embedding_separator
+        self.score_threshold = score_threshold
+
+        if self.top_k <= 0:
+            raise ValueError(f"top_k must be > 0, but got {top_k}")
+
+
+    def _get_similarity_score(self, text_1: str, text_2: List[str]) -> Optional[Dict[str, Any]]:
+        """
+        Внутренний метод для отправки запроса на API и получения оценки сходства.
+        """
+        url = f'{self.api_base_url}/score'
+
+        # Заголовки для запроса
+        headers = {
+            'accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+
+        # Данные для отправки
+        data = {
+            'model': self.model,
+            'text_1': text_1,
+            'text_2': text_2
+        }
+
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()  # Выкидывает исключение, если статус не 200
+
+            return response.json()  # Преобразуем ответ в JSON
+        except requests.exceptions.RequestException as e:
+            print(f"Error during API request: {e}")
+            return None
+
+
+    @component.output_types(documents=List[Document])
+    def run(
+        self,
+        query: str,
+        documents: List[Document],
+        top_k: Optional[int] = None,
+        score_threshold: Optional[float] = None,
+        ):
+      if not documents:
+          return {"documents": []}
+
+      top_k = top_k or self.top_k
+
+      score_threshold = score_threshold or self.score_threshold
+
+      if top_k <= 0:
+          raise ValueError(f"top_k must be > 0, but got {top_k}")
+
+      final_documents = []
+      for doc in documents:
+          meta_values_to_embed = [
+              str(doc.meta[key]) for key in self.meta_fields_to_embed if key in doc.meta and doc.meta[key]
+          ]
+          text_to_embed = self.embedding_separator.join(meta_values_to_embed + [doc.content or ""])
+          final_documents.append(self.document_prefix + text_to_embed)
+
+      response = self._get_similarity_score(query, final_documents)
+
+      scores = response['data']
+
+      for score_data in scores:
+          index = score_data['index']
+          score = score_data['score'][0]
+          documents[index].score = score
+
+      sorted_documents = sorted(documents, key=lambda doc: doc.score, reverse=True)
+
+      if score_threshold is not None:
+          sorted_documents = [doc for doc in sorted_documents if doc.score >= score_threshold]
+
+      ranked_docs = sorted_documents[:top_k]
+
+      return {"documents": ranked_docs}
+
+
 def create_in_memory_document_store():
     document_store = InMemoryDocumentStore()
 
@@ -254,60 +359,63 @@ def create_chroma_document_store():
     return document_store
 
 def create_indexing_pipeline(document_store):
+      file_type_router = FileTypeRouter(mime_types=[
+          "application/pdf",
+          "text/csv",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          ])
 
-    file_type_router = FileTypeRouter(mime_types=[
-        "application/pdf",
-        "text/csv",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ])
+      pdf_converter = PyPDFToDocument()
+      docx_converter = DOCXToDocument()
+      csv_converter = CSVToDocument()
+      pptx_converter = PPTXToDocument()
 
-    pdf_converter = PyPDFToDocument()
-    docx_converter = DOCXToDocument()
-    csv_converter = CSVToDocument()
-    pptx_converter = PPTXToDocument()
+      document_joiner = DocumentJoiner()
+      document_cleaner = DocumentCleaner()
+      document_splitter = DocumentSplitter(split_by="page", split_length=1, split_overlap=0)
+      document_writer = DocumentWriter(document_store)
+      document_embedder = OpenAIDocumentEmbedder(
+          api_base_url = VLLM_EMBEDDING_URL,
+          api_key = Secret.from_token("VLLM-PLACEHOLDER-API-KEY"),
+          model = embedding_model,
+          )
 
-    document_joiner = DocumentJoiner()
-    document_cleaner = DocumentCleaner()
-    document_splitter = DocumentSplitter(split_by="page", split_length=1, split_overlap=0)
-    document_writer = DocumentWriter(document_store)
-    document_embedder = SentenceTransformersDocumentEmbedder(model = embedding_model, device = device)
+      indexing_pipeline = Pipeline()
 
-    indexing_pipeline = Pipeline()
+      indexing_pipeline.add_component(instance=file_type_router, name="file_type_router")
+      indexing_pipeline.add_component(instance=pdf_converter, name="pypdf_converter")
+      indexing_pipeline.add_component(instance=docx_converter, name="docx_converter")
+      indexing_pipeline.add_component(instance=csv_converter, name="csv_converter")
+      indexing_pipeline.add_component(instance=pptx_converter, name="pptx_converter")
 
-    indexing_pipeline.add_component(instance=file_type_router, name="file_type_router")
-    indexing_pipeline.add_component(instance=pdf_converter, name="pypdf_converter")
-    indexing_pipeline.add_component(instance=docx_converter, name="docx_converter")
-    indexing_pipeline.add_component(instance=csv_converter, name="csv_converter")
-    indexing_pipeline.add_component(instance=pptx_converter, name="pptx_converter")
+      indexing_pipeline.add_component(instance=document_joiner, name="document_joiner")
+      indexing_pipeline.add_component(instance=document_cleaner, name="document_cleaner")
+      indexing_pipeline.add_component(instance=document_splitter, name="document_splitter")
+      indexing_pipeline.add_component(instance=document_embedder, name="document_embedder")
+      indexing_pipeline.add_component(instance=document_writer, name="document_writer")
 
-    indexing_pipeline.add_component(instance=document_joiner, name="document_joiner")
-    indexing_pipeline.add_component(instance=document_cleaner, name="document_cleaner")
-    indexing_pipeline.add_component(instance=document_splitter, name="document_splitter")
-    indexing_pipeline.add_component(instance=document_embedder, name="document_embedder")
-    indexing_pipeline.add_component(instance=document_writer, name="document_writer")
+      indexing_pipeline.connect("file_type_router.application/pdf", "pypdf_converter.sources")
+      indexing_pipeline.connect(
+          "file_type_router.application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "docx_converter.sources")
+      indexing_pipeline.connect(
+          "file_type_router.application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "pptx_converter.sources"
+      )
+      indexing_pipeline.connect("file_type_router.text/csv", "csv_converter.sources")
 
-    indexing_pipeline.connect("file_type_router.application/pdf", "pypdf_converter.sources")
-    indexing_pipeline.connect(
-        "file_type_router.application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "docx_converter.sources")
-    indexing_pipeline.connect(
-        "file_type_router.application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "pptx_converter.sources"
-    )
-    indexing_pipeline.connect("file_type_router.text/csv", "csv_converter.sources")
+      indexing_pipeline.connect("pypdf_converter", "document_joiner")
+      indexing_pipeline.connect("docx_converter", "document_joiner")
+      indexing_pipeline.connect("csv_converter", "document_joiner")
+      indexing_pipeline.connect("pptx_converter", "document_joiner")
 
-    indexing_pipeline.connect("pypdf_converter", "document_joiner")
-    indexing_pipeline.connect("docx_converter", "document_joiner")
-    indexing_pipeline.connect("csv_converter", "document_joiner")
-    indexing_pipeline.connect("pptx_converter", "document_joiner")
+      indexing_pipeline.connect("document_joiner", "document_splitter")
+      indexing_pipeline.connect("document_splitter", "document_cleaner")
+      indexing_pipeline.connect("document_cleaner", "document_embedder")
+      indexing_pipeline.connect("document_embedder", "document_writer")
 
-    indexing_pipeline.connect("document_joiner", "document_splitter")
-    indexing_pipeline.connect("document_splitter", "document_cleaner")
-    indexing_pipeline.connect("document_cleaner", "document_embedder")
-    indexing_pipeline.connect("document_embedder", "document_writer")
-
-    return indexing_pipeline
+      return indexing_pipeline
 
 def save_documents_from_store(document_store_name: str):
     if not document_store_name.endswith(".pkl"):
@@ -330,16 +438,6 @@ def load_documents_to_store(document_store, document_store_name: str):
 
     # return document_store
 
-document_store = create_in_memory_document_store()
-
-document_store_config = rag_config.get("document_store", {})
-
-if document_store_config.get("reindex"):
-  do_reindex()
-else:
-  load_documents_to_store(document_store, document_store_config.get("load_path"))
-
-indexing_pipeline = create_indexing_pipeline(document_store = document_store)
 
 def create_generator(gen_kwargs = None):
     return OpenAIChatGenerator(
@@ -521,6 +619,19 @@ def do_index_single_file(file_path):
     gc.collect()
     torch.cuda.empty_cache()
 
+
+document_store = create_in_memory_document_store()
+
+document_store_config = rag_config.get("document_store", {})
+
+if document_store_config.get("reindex"):
+  do_reindex()
+else:
+  load_documents_to_store(document_store, document_store_config.get("load_path"))
+
+indexing_pipeline = create_indexing_pipeline(document_store = document_store)
+
+
 def find_manual_summary_documents():
     # Получаем все документы из document_store
     all_documents = document_store.filter_documents()
@@ -534,45 +645,58 @@ def find_manual_summary_documents():
     return manual_summary_docs
 
 def create_rag_pipeline(
-        document_store,
-) -> Pipeline:
-    expander = QueryExpander(
-        system_prompt = prompt_config['query_expander_system_prompt'],
-        user_prompt_template = prompt_config['query_expander_user_prompt_template'],
-        json_gen_kwargs = json_gen_kwargs,
-    )
-    document_joiner = DocumentJoiner(top_k = rag_config.get("document_joiner").get("top_k", 4), join_mode = "distribution_based_rank_fusion")
-    text_embedder = MultiQueryTextEmbedder(SentenceTransformersTextEmbedder(model=embedding_model, device=device))
-    embedding_retriever = MultiQueryInMemoryRetriever(InMemoryEmbeddingRetriever(document_store), top_k = rag_config.get("embedding_retriever").get("top_k", 3))
-    bm25_retriever = MultiQueryInMemoryBM25Retriever(InMemoryBM25Retriever(document_store), top_k = rag_config.get("bm25_retriever").get("top_k", 3))
+    document_store,
+    ) -> Pipeline:
+  expander = QueryExpander(
+      system_prompt = prompt_config['query_expander_system_prompt'],
+      user_prompt_template = prompt_config['query_expander_user_prompt_template'],
+      json_gen_kwargs = json_gen_kwargs,
+  )
 
-    final_answer_prompt_builder = ChatPromptBuilder(variables=["documents", "question"])
+  text_embedder = MultiQueryTextEmbedder(OpenAITextEmbedder(
+      model = embedding_model,
+      api_base_url = VLLM_EMBEDDING_URL,
+      api_key = Secret.from_token("VLLM-PLACEHOLDER-API-KEY"),
+      ))
 
-    doc_relevant_generator = create_generator(rag_gen_kwargs)
-    final_answer_generator = create_generator(rag_gen_kwargs)
+  embedding_retriever = MultiQueryInMemoryRetriever(InMemoryEmbeddingRetriever(document_store), top_k = rag_config.get("embedding_retriever").get("top_k", 3))
+  bm25_retriever = MultiQueryInMemoryBM25Retriever(InMemoryBM25Retriever(document_store), top_k = rag_config.get("bm25_retriever").get("top_k", 3))
 
-    rag_pipeline = Pipeline()
+  document_joiner = DocumentJoiner(top_k = rag_config.get("document_joiner").get("top_k", 4), join_mode = "distribution_based_rank_fusion")
 
-    rag_pipeline.add_component("expander", expander)
-    rag_pipeline.add_component("text_embedder", text_embedder)
-    rag_pipeline.add_component("embedding_retriever", embedding_retriever)
-    rag_pipeline.add_component("bm25_retriever", bm25_retriever)
-    rag_pipeline.add_component("document_joiner", document_joiner)
+  cross_encoder = CustomOpenAIApiRanker(
+      model = cross_encoder_model,
+      api_base_url = VLLM_RERANKER_URL,
+      top_k = cross_encoder_config.get("top_k", 4),
+      score_threshold = cross_encoder_config.get("threshold", 0.0),
+      )
 
-    rag_pipeline.add_component("final_answer_prompt_builder", final_answer_prompt_builder)
-    rag_pipeline.add_component("final_answer_llm", final_answer_generator)
+  final_answer_prompt_builder = ChatPromptBuilder(variables=["documents", "question"])
+  final_answer_generator = create_generator(rag_gen_kwargs)
 
+  rag_pipeline = Pipeline()
 
-    rag_pipeline.connect("expander.queries", "text_embedder.queries")
-    rag_pipeline.connect("expander.queries", "bm25_retriever.queries")
-    rag_pipeline.connect("text_embedder.embeddings", "embedding_retriever")
-    rag_pipeline.connect("bm25_retriever", "document_joiner")
-    rag_pipeline.connect("embedding_retriever", "document_joiner")
+  rag_pipeline.add_component("expander", expander)
+  rag_pipeline.add_component("text_embedder", text_embedder)
+  rag_pipeline.add_component("embedding_retriever", embedding_retriever)
+  rag_pipeline.add_component("bm25_retriever", bm25_retriever)
+  rag_pipeline.add_component("document_joiner", document_joiner)
+  rag_pipeline.add_component("cross_encoder", cross_encoder)
 
-    rag_pipeline.connect("document_joiner", "final_answer_prompt_builder.documents")
-    rag_pipeline.connect("final_answer_prompt_builder", "final_answer_llm")
+  rag_pipeline.add_component("final_answer_prompt_builder", final_answer_prompt_builder)
+  rag_pipeline.add_component("final_answer_llm", final_answer_generator)
 
-    return rag_pipeline
+  rag_pipeline.connect("expander.queries", "text_embedder.queries")
+  rag_pipeline.connect("expander.queries", "bm25_retriever.queries")
+  rag_pipeline.connect("text_embedder.embeddings", "embedding_retriever")
+  rag_pipeline.connect("bm25_retriever", "document_joiner")
+  rag_pipeline.connect("embedding_retriever", "document_joiner")
+  rag_pipeline.connect("document_joiner", "cross_encoder")
+
+  rag_pipeline.connect("cross_encoder", "final_answer_prompt_builder.documents")
+  rag_pipeline.connect("final_answer_prompt_builder", "final_answer_llm")
+
+  return rag_pipeline
 
 rag_pipeline = create_rag_pipeline(document_store = document_store)
 
@@ -590,10 +714,10 @@ class ModelResponse(BaseModel):
     references: Optional[List[Reference]] = None
 
 def get_chat_response(
-        question: str,
-        category: Optional[str] = None,
-        space: Optional[str] = None,
-        filename: Optional[str] = None,
+    question: str,
+    category: Optional[str] = None,
+    space: Optional[str] = None,
+    filename: Optional[str] = None,
 ) -> ModelResponse:
 
     filters = {"operator": "AND", "conditions": []}
@@ -603,7 +727,7 @@ def get_chat_response(
         filters["conditions"].append({"field": "meta.filename", "operator": "==", "value": filename})
     if category:
         filters["conditions"].append({"field": "meta.category", "operator": "==", "value": category})
-
+    global response
     response = rag_pipeline.run({
         "expander": {
             "query": question,
@@ -614,26 +738,29 @@ def get_chat_response(
         "embedding_retriever": {
             "filters": filters,
         },
+        "cross_encoder": {
+            "query": question,
+        },
         "final_answer_prompt_builder": {
             "question": question,
             "template": final_answer_messages,
         },
-    }, include_outputs_from={"expander", "document_joiner", "final_answer_prompt_builder"})
+    }, include_outputs_from={"expander", "embedding_retriever", "document_joiner", "cross_encoder", "final_answer_prompt_builder"})
 
     response_text = response['final_answer_llm']['replies'][0].content
 
     references = None
 
     try:
-        documents = response.get('document_joiner', {}).get('documents', [])
-        document_joiner_references = [
+        documents = response.get('cross_encoder', {}).get('documents', [])
+        cross_encoder_references = [
             Reference(
                 filename=doc.meta.get('filename', ''),
                 page_number=int(doc.meta.get('page_number')) if doc.meta.get('page_number') is not None else 0
-            ) for doc in documents if doc.score > document_joiner_threshold
+            ) for doc in documents
         ]
     except Exception as e:
-        logger.warn(f"Ошибка при формировании references из документов: {e}")
+        logger.warn(f"Ошибка при формировании references из cross encoder'а: {e}")
 
     try:
         # Находим индекс последнего символа ']'
@@ -653,13 +780,13 @@ def get_chat_response(
     except Exception as e:
         logger.warn(f"Общая ошибка при обработке ответа: {e}")
 
-    if references and document_joiner_references:
-        for doc_joiner_ref in document_joiner_references:
-            if doc_joiner_ref not in references:
-                references.append(doc_joiner_ref)
+    if references and cross_encoder_references:
+      for doc_joiner_ref in cross_encoder_references:
+          if doc_joiner_ref not in references:
+              references.append(doc_joiner_ref)
 
-    if references is None and document_joiner_references:
-        references = document_joiner_references
+    if references is None and cross_encoder_references:
+      references = cross_encoder_references
 
     if "Я не знаю ответа на ваш вопрос" in response_text:
         response_text = "Я не знаю ответа на ваш вопрос"
@@ -669,6 +796,7 @@ def get_chat_response(
     torch.cuda.empty_cache()
 
     return ModelResponse(answer=response_text, references=references)
+
 
 def model_response_to_json(
         model_response: ModelResponse,
@@ -732,6 +860,7 @@ def model_response_to_json(
 
     return json_output
 
+
 def get_chat_response_json(input_data: Dict[str, Any]) -> str:
     # Извлечение значений из входного JSON-данных
     category = input_data.get("category", None)
@@ -752,6 +881,7 @@ def get_chat_response_json(input_data: Dict[str, Any]) -> str:
 
     return json_output
 
+
 def create_gen_rel_questions_pipeline():
     pipeline = Pipeline()
 
@@ -768,6 +898,7 @@ def create_gen_rel_questions_pipeline():
 gen_questions_pipeline = create_gen_rel_questions_pipeline()
 
 gen_questions_system_message = ChatMessage.from_system(prompt_config['qwen_gen_related_system_prompt'])
+
 
 def generate_related_questions(conversational: List[List[Union[str, str]]]) -> List[str]:
     chat_messages = [gen_questions_system_message]
@@ -809,8 +940,177 @@ def generate_related_questions(conversational: List[List[Union[str, str]]]) -> L
     # Возвращаем распарсенные вопросы или пустой список при ошибке
     return questions
 
-import pandas as pd
-import os
+
+def create_retrieval_pipeline(document_store, use_ranker=False, use_query_expander=False) -> Pipeline:
+    # Создаем компоненты для пайплайна
+    text_embedder = MultiQueryTextEmbedder(OpenAITextEmbedder(
+        model=embedding_model,
+        api_base_url=VLLM_EMBEDDING_URL,
+        api_key=Secret.from_token("VLLM-PLACEHOLDER-API-KEY"),
+    ))
+
+    embedding_retriever = MultiQueryInMemoryRetriever(
+        InMemoryEmbeddingRetriever(document_store),
+        top_k=rag_config.get("embedding_retriever").get("top_k", 3)
+    )
+
+    bm25_retriever = MultiQueryInMemoryBM25Retriever(
+        InMemoryBM25Retriever(document_store),
+        top_k=rag_config.get("bm25_retriever").get("top_k", 3)
+    )
+
+    document_joiner = DocumentJoiner(
+        top_k=rag_config.get("document_joiner").get("top_k", 4),
+        join_mode="distribution_based_rank_fusion"
+    )
+
+    # Пайплайн
+    pipeline = Pipeline()
+
+    # Добавляем базовые компоненты
+    pipeline.add_component("text_embedder", text_embedder)
+    pipeline.add_component("embedding_retriever", embedding_retriever)
+    pipeline.add_component("bm25_retriever", bm25_retriever)
+    pipeline.add_component("document_joiner", document_joiner)
+
+    # Соединяем компоненты
+    pipeline.connect("text_embedder.embeddings", "embedding_retriever")
+    pipeline.connect("embedding_retriever", "document_joiner")
+    pipeline.connect("bm25_retriever", "document_joiner")
+
+    # Условно добавляем ранкер
+    if use_ranker:
+        cross_encoder = CustomOpenAIApiRanker(
+            model=cross_encoder_model,
+            api_base_url=VLLM_RERANKER_URL,
+            top_k=cross_encoder_config.get("top_k", 4),
+            score_threshold=cross_encoder_config.get("threshold", 0.0),
+        )
+        pipeline.add_component("cross_encoder", cross_encoder)
+        pipeline.connect("document_joiner", "cross_encoder")
+
+    # Условно добавляем query_expander
+    if use_query_expander:
+        expander = QueryExpander(
+            system_prompt=prompt_config['query_expander_system_prompt'],
+            user_prompt_template=prompt_config['query_expander_user_prompt_template'],
+            json_gen_kwargs=json_gen_kwargs,
+        )
+        pipeline.add_component("expander", expander)
+        pipeline.connect("expander.queries", "text_embedder.queries")
+        pipeline.connect("expander.queries", "bm25_retriever.queries")
+
+    return pipeline
+
+
+simple_retrieval_pipeline = create_retrieval_pipeline(document_store)
+base_retrieval_pipeline = create_retrieval_pipeline(document_store, use_ranker=True)
+full_retrieval_pipeline = create_retrieval_pipeline(document_store, use_ranker = True, use_query_expander=True)
+
+
+def run_simple_retrieval(
+    question: str,
+    category: Optional[str] = None,
+    space: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> List[Document]:
+
+    filters = {"operator": "AND", "conditions": []}
+    if space:
+        filters["conditions"].append({"field": "meta.space", "operator": "==", "value": space})
+    if filename:
+        filters["conditions"].append({"field": "meta.filename", "operator": "==", "value": filename})
+    if category:
+        filters["conditions"].append({"field": "meta.category", "operator": "==", "value": category})
+
+    response = simple_retrieval_pipeline.run({
+        "text_embedder": {
+            "queries": [question]
+        },
+        "embedding_retriever": {
+            "filters": filters,
+        },
+        "bm25_retriever": {
+            "filters": filters,
+            "queries": [question]
+        },
+    })
+
+    retrieved_documents = response['document_joiner']['documents']
+
+    return retrieved_documents
+
+
+def run_base_retrieval(
+    question: str,
+    category: Optional[str] = None,
+    space: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> List[Document]:
+
+    filters = {"operator": "AND", "conditions": []}
+    if space:
+        filters["conditions"].append({"field": "meta.space", "operator": "==", "value": space})
+    if filename:
+        filters["conditions"].append({"field": "meta.filename", "operator": "==", "value": filename})
+    if category:
+        filters["conditions"].append({"field": "meta.category", "operator": "==", "value": category})
+
+    response = base_retrieval_pipeline.run({
+        "text_embedder": {
+            "queries": [question]
+        },
+        "embedding_retriever": {
+            "filters": filters,
+        },
+        "bm25_retriever": {
+            "filters": filters,
+            "queries": [question]
+        },
+        "cross_encoder": {
+            "query": question
+        }
+    })
+
+    retrieved_documents = response['cross_encoder']['documents']
+
+    return retrieved_documents
+
+
+def run_full_retrieval(
+    question: str,
+    category: Optional[str] = None,
+    space: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> List[Document]:
+
+    filters = {"operator": "AND", "conditions": []}
+    if space:
+        filters["conditions"].append({"field": "meta.space", "operator": "==", "value": space})
+    if filename:
+        filters["conditions"].append({"field": "meta.filename", "operator": "==", "value": filename})
+    if category:
+        filters["conditions"].append({"field": "meta.category", "operator": "==", "value": category})
+
+    response = full_retrieval_pipeline.run({
+        "expander": {
+            "query": question
+        },
+        "embedding_retriever": {
+            "filters": filters,
+        },
+        "bm25_retriever": {
+            "filters": filters,
+        },
+        "cross_encoder": {
+            "query": question
+        },
+    })
+
+    retrieved_documents = response['cross_encoder']['documents']
+
+    return retrieved_documents
+
 
 def generate_submission_csv(input_csv: str, output_csv: str):
     """
