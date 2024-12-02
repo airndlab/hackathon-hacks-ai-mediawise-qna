@@ -14,7 +14,7 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - 8000
+      - 8000:8000
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
     networks:
@@ -35,7 +35,7 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - 8001
+      - 8001:8000
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
     networks:
@@ -56,7 +56,7 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - 8002
+      - 8002:8000
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
     networks:
@@ -84,8 +84,8 @@ services:
       - ./index:/data/index
     environment:
       - VLLM_URL=http://vllm:8000/v1
-      - VLLM_EMBEDDING_URL=http://vllm_embedding:8001/v1
-      - VLLM_RERANKER_URL=http://vllm_ranker:8002/v1
+      - VLLM_EMBEDDING_URL=http://vllm_embedding:8000/v1
+      - VLLM_RERANKER_URL=http://vllm_ranker:8000/v1
       - CHROMA_HOSTNAME=158.160.68.33
       - CHROMA_PORT=8000
       - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
