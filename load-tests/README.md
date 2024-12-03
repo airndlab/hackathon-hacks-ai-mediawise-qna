@@ -15,6 +15,21 @@ Intel Broadwell with NVIDIA® Tesla® V100 (gpu-standard-v1)
 |----------------|----------|-----------------|---------|
 | 1              | 32       | 8               | 96      |
 
+### Полный LLM пайплайн
+
+![img.png](images/img.png)
+
+LLM: *Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4*
+
+Embedder: *deepvk/USER-bge-m3*
+
+Ranker: *qilowoq/bge-reranker-v2-m3-en-ru*
+
+### VLM модели 
+Для индексациии: *vidore/colpali-v1.2*
+
+Для генерации (VLM): *Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4* 
+
 ### Результаты
 
 #### LLM
