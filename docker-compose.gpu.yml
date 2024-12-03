@@ -79,7 +79,7 @@ services:
       - ./dataset:/data/dataset
       - ./index:/data/index
     environment:
-      - PIPELINE_TYPE
+      - PIPELINE_TYPE=${PIPELINE_TYPE:-LLM}
       - VLLM_URL=http://vllm:8000/v1
       - VLLM_VLM_URL=http://vllm_vlm:8000/v1
       - VLLM_EMBEDDING_URL=http://vllm_embedding:8000/v1
