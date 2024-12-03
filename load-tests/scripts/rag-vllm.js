@@ -19,7 +19,7 @@ function loadQuestions(filePath) {
 const questions = loadQuestions(`../questions/${questionType}.csv`)
 
 export default function() {
-  const url = 'http://158.160.85.147:8000/v1/chat/completions'
+  const url = 'http://158.160.85.147:8080/simple_asking'
 
   const question = questions[Math.floor(Math.random() * questions.length)]
 

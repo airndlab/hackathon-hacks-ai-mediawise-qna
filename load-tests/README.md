@@ -41,11 +41,21 @@ Intel Broadwell with NVIDIA® Tesla® V100 (gpu-standard-v1)
 
 Запросы:
 
-![vllm-req.png](charts%2Fvllm-req.png)
+![vllm-req.png](charts/vllm-req.png)
 
 Ресурсы:
 
-![vllm-stats.png](charts%2Fvllm-stats.png)
+![vllm-stats.png](charts/vllm-stats.png)
+
+## Запросы к модели (VLLM) через сервис (rag)
+
+Запросы:
+
+![rag-vllm-req.png](charts/rag-vllm-req.png)
+
+Ресурсы:
+
+![rag-vllm-stats.png](charts/rag-vllm-stats.png)
 
 ## Запуск
 
