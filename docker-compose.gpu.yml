@@ -65,7 +65,7 @@ services:
     command: --model deepvk/USER-bge-m3 --task embedding --device cuda
 
   rag:
-    image: airndlab/mediawise-rag:2024.12.03-06-40
+    image: airndlab/mediawise-rag:2024.12.03-08-32
     deploy:
       resources:
         reservations:
