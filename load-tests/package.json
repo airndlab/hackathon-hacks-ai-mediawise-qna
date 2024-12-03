@@ -2,8 +2,10 @@
   "name": "load-tests",
   "version": "1.0.0",
   "scripts": {
-    "llm": "k6 run script.js -e TYPE=llm",
-    "vlm": "k6 run script.js -e TYPE=vlm"
+    "llm": "k6 run scripts/rag-asking.js -e TYPE=llm",
+    "vlm": "k6 run scripts/rag-asking.js -e TYPE=vlm",
+    "vllm": "k6 run scripts/vllm.js",
+    "rag-vllm": "k6 run scripts/rag-vllm.js"
   },
   "devDependencies": {
     "k6": "^0.0.0"

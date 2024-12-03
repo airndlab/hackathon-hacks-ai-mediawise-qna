@@ -37,6 +37,16 @@ Intel Broadwell with NVIDIA® Tesla® V100 (gpu-standard-v1)
 
 ![vlm-stats.png](charts/vlm-stats.png)
 
+## Запросы напрямую к модели (VLLM)
+
+Запросы:
+
+![vllm-req.png](charts%2Fvllm-req.png)
+
+Ресурсы:
+
+![vllm-stats.png](charts%2Fvllm-stats.png)
+
 ## Запуск
 
 Сначала запускается скрипт сбора статистики потребления ресурсов на ВМ, дальше на ПК запускаются k6 тесты.

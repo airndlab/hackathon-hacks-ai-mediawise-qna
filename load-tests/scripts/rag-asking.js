@@ -17,7 +17,7 @@ function loadQuestions(filePath) {
 }
 
 // Загрузка вопросов
-const questions = loadQuestions(`questions/${type}.csv`);
+const questions = loadQuestions(`../questions/${type}.csv`);
 
 export default function() {
   const url = 'http://158.160.85.147:8080/asking'

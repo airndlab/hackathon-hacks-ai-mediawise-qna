@@ -4,3 +4,27 @@ Content-Type: application/json
 {
   "question": "Какие есть подкасты?"
 }
+
+###
+
+POST http://158.160.85.147:8000/v1/chat/completions
+Content-Type: application/json
+
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Привет, как дела?"
+    }
+  ],
+  "model": "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4"
+}
+
+###
+
+POST http://158.160.85.147:8080/simple_asking
+Content-Type: application/json
+
+{
+  "question": "Привет, как дела?"
+}
