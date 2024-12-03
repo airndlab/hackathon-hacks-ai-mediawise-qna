@@ -7,7 +7,7 @@ from matplotlib.ticker import MaxNLocator
 
 # Чтение данных из файла
 if len(sys.argv) < 2:
-    filename = 'reports/stats.csv'
+    filename = 'reports/llm/stats.csv'
 else:
     filename = sys.argv[1]
 

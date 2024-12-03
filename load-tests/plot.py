@@ -5,7 +5,7 @@ import os
 
 # Папка с результатами
 if len(sys.argv) < 2:
-    results_folder = './reports-llm'
+    results_folder = './reports/llm'
 else:
     results_folder = sys.argv[1]
 

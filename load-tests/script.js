@@ -4,16 +4,20 @@ import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporte
 
 const k6VUS = __ENV.K6_VUS
 const k6DURATION = __ENV.K6_DURATION
+const type = __ENV.TYPE
 
-const questions = [
-  'Какие есть подкасты?',
-  'Кто самый популярный стример?',
-  'Какие существуют рекламные площадки?',
-  'Кто такой Хазбик?',
-  'Какие есть методы рекламы?',
-  'Какие есть крупные спонсоры?',
-  'Что сейчас в тренде?',
-]
+// Функция для чтения вопросов из CSV файла
+function loadQuestions(filePath) {
+  const file = open(filePath); // Открытие файла
+  const questions = [];
+  for (const line of readLines(file)) {
+    questions.push(line.trim());
+  }
+  return questions;
+}
+
+// Загрузка вопросов
+const questions = loadQuestions(`questions/${type}.csv`);
 
 export default function() {
   const url = 'http://158.160.85.147:8080/asking'
@@ -41,7 +45,7 @@ export default function() {
 
 export function handleSummary(data) {
   return {
-    [`reports/result-${k6DURATION}-${k6VUS}.json`]: JSON.stringify(data, null, 2),
-    [`reports/result-${k6DURATION}-${k6VUS}.html`]: htmlReport(data),
+    [`reports/${type}/result-${k6DURATION}-${k6VUS}.json`]: JSON.stringify(data, null, 2),
+    [`reports/${type}/result-${k6DURATION}-${k6VUS}.html`]: htmlReport(data),
   }
 }
