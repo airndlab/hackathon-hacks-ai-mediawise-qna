@@ -41,7 +41,7 @@ services:
     networks:
       - mwgpu-net
       - shared-net
-    command: --model Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4 --allowed-local-media-path /data/pdf_imgs --quantization gptq --gpu-memory-utilization 0.75 --device cuda
+    command: --model Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4 --allowed-local-media-path / --quantization gptq --gpu-memory-utilization 0.75 --device cuda
 
   vllm_embedding:
     image: vllm/vllm-openai:v0.6.4
