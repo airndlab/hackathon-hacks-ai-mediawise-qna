@@ -1,9 +1,13 @@
 import json
 import matplotlib.pyplot as plt
+import sys
 import os
 
 # Папка с результатами
-results_folder = './reports'
+if len(sys.argv) < 2:
+    results_folder = './reports/llm'
+else:
+    results_folder = sys.argv[1]
 
 # Массивы для хранения данных
 vus_values = []   # Количество пользователей (K6_VUS)

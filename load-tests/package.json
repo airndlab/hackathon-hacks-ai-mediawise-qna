@@ -2,7 +2,8 @@
   "name": "load-tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "k6 run script.js"
+    "llm": "k6 run script.js -e TYPE=llm",
+    "vlm": "k6 run script.js -e TYPE=vlm"
   },
   "devDependencies": {
     "k6": "^0.0.0"

@@ -1,11 +1,16 @@
 import csv
 import matplotlib.pyplot as plt
 from datetime import datetime
+import sys
 import matplotlib.ticker as ticker
 from matplotlib.ticker import MaxNLocator
 
 # Чтение данных из файла
-filename = 'reports/stats.csv'
+if len(sys.argv) < 2:
+    filename = 'reports/llm/stats.csv'
+else:
+    filename = sys.argv[1]
+
 timestamps = []
 service_names = set()
 cpu_usage = {}
