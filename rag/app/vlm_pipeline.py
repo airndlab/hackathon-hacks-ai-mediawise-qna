@@ -59,7 +59,7 @@ vlm_top_k = vlm_rag_config.get("vlm_top_k", 1)
 index_config = vlm_rag_config.get("index", {})
 index_name = index_config.get("name", "index")
 
-VLLM_URL = os.getenv("VLLM_URL")
+VLLM_URL = os.getenv("VLLM_VLM_URL")
 
 summary_df = pd.read_csv(SUMMARY_DF_PATH)
 
