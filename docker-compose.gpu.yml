@@ -38,6 +38,7 @@ services:
       - 8000:8000
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
+      - ./pdf_imgs:/data/pdf_imgs
     networks:
       - mwgpu-net
       - shared-net
