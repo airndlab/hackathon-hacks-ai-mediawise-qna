@@ -78,6 +78,8 @@ services:
       - ./config:/config
       - ./dataset:/data/dataset
       - ./index:/data/index
+      - ./byaldi_index:/data/byaldi_index
+      - ./pdf_imgs:/data/pdf_imgs
     environment:
       - PIPELINE_TYPE=${PIPELINE_TYPE:-LLM}
       - VLLM_URL=http://vllm:8000/v1
