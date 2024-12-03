@@ -24,6 +24,13 @@ vlm_model = vlm_rag_config.get("vlm_model")
 
 PIPELINE_TYPE = os.getenv("PIPELINE_TYPE")
 
+# PROMPT CONFIG
+PROMPTS_CONFIG_PATH = os.getenv("PROMPTS_CONFIG_PATH")
+with open(PROMPTS_CONFIG_PATH, 'r', encoding='utf-8') as file:
+    prompt_config = yaml.safe_load(file)
+
+vlm_system_prompt = prompt_config['vlm_system_prompt']
+
 if PIPELINE_TYPE == "LLM":
     api_base_url = os.getenv("VLLM_URL")
 elif PIPELINE_TYPE == "VLM":
@@ -51,6 +58,13 @@ class AnswerResponse(BaseModel):
 
 class RetrieveResponse(BaseModel):
     documents: Optional[List[Any]] = []
+
+
+class SimpleVLMRequest(BaseModel):
+    question: str = None
+    filename: str = None
+    page_number: int = None
+
 
 if PIPELINE_TYPE == "LLM":
     @router.post("/asking")
@@ -142,4 +156,61 @@ elif PIPELINE_TYPE == "VLM":
             message=model_response.get("message", ""),
             sources=model_response.get("sources", []),
         )
+
+
+    @router.post("/simple_asking")
+    async def ask(request: SimpleVLMRequest):
+        # Формируем полный путь к изображению
+        if request.filename and request.page_number is not None:
+            image_url = f"file:///data/pdf_imgs/{request.filename}/page_{request.page_number}.png"
+        else:
+            image_url = None
+
+        # Формируем текстовый запрос
+        text_query = request.question or "No question provided."
+
+        # Формируем сообщение для API
+        messages = [
+            {
+                "role": "system",
+                "content": vlm_system_prompt
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text_query},
+                    {"type": "image_url", "image_url": {"url": image_url}} if image_url else None
+                ]
+            }
+        ]
+
+        # Удаляем None из списка контента
+        messages[1]["content"] = [item for item in messages[1]["content"] if item]
+
+        # Отправляем запрос в API
+        chat_response = client.chat.completions.create(
+            model=vlm_model,
+            messages=messages
+        )
+
+        # Извлекаем результат
+        output_text = chat_response.choices[0].message.content
+
+        return AnswerResponse(
+            message=output_text,
+        )
+
+
+    @router.post("/base_retrieve")
+    async def base_retrieve(request: QuestionRequest):
+        from app import vlm_pipeline
+
+        retrieved_documents = vlm_pipeline.get_retrieve_response(
+            text_query =  request.question,
+            category =  request.category,
+            space = request.space,
+            filename = request.filename,
+        )
+
+        return RetrieveResponse(documents=retrieved_documents)
 
