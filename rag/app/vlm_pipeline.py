@@ -228,7 +228,13 @@ def get_retrieve_response(text_query, category=None, space=None, filename=None):
 
   results = main_index.search(text_query, k=1, filter_metadata=filter_metadata)
 
-  return results
+  # Получаем doc_id из результатов
+  doc_id = results[0]["doc_id"]
+  page_num = results[0]["page_num"]
+
+  image_data = {"doc_id": doc_id, "page_num": page_num}
+
+  return [image_data]
 
 
 def get_rag_response(text_query, category=None, space=None, filename=None):
