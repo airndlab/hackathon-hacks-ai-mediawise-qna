@@ -15,6 +15,7 @@ from byaldi import RAGMultiModalModel
 import torch
 import gc
 
+from numpy.random import default_rng
 from pdf2image import convert_from_path
 
 
@@ -213,6 +214,21 @@ client = OpenAI(
     api_key="VLLM-PLACEHOLDER-API-KEY",
     base_url=VLLM_URL,
 )
+
+
+def get_retrieve_response(text_query, category=None, space=None, filename=None):
+  # Формируем filter_metadata
+  filter_metadata = {}
+  if category:
+    filter_metadata["category"] = category
+  if space:
+    filter_metadata["space"] = space
+  if filename:
+    filter_metadata["filename"] = filename
+
+  results = main_index.search(text_query, k=1, filter_metadata=filter_metadata)
+
+  return results
 
 
 def get_rag_response(text_query, category=None, space=None, filename=None):
