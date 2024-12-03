@@ -2,6 +2,7 @@ import json
 import matplotlib.pyplot as plt
 import sys
 import os
+import csv
 
 # Папка с результатами
 if len(sys.argv) < 2:
@@ -50,6 +51,16 @@ for filename in os.listdir(results_folder):
 # Сортировка данных по количеству пользователей (VUS)
 sorted_data = sorted(zip(vus_values, avg_times, max_times, min_times, error_rates))
 vus_values, avg_times, max_times, min_times, error_rates = map(list, zip(*sorted_data))
+
+# Сохранение данных в CSV
+csv_file_path = os.path.join(results_folder, 'req.csv')
+with open(csv_file_path, mode='w', newline='', encoding='utf-8') as csv_file:
+    writer = csv.writer(csv_file)
+    writer.writerow(['Количество пользователей (VUS)', 'Среднее время (ms)',
+                     'Максимальное время (ms)', 'Минимальное время (ms)',
+                     'Процент ошибок (%)'])
+    for row in zip(vus_values, avg_times, max_times, min_times, [e * 100 for e in error_rates]):
+        writer.writerow(row)
 
 # Построение графиков
 plt.figure(figsize=(12, 8))
