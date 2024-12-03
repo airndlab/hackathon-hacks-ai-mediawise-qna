@@ -1,5 +1,6 @@
 api:
   base_url: "http://158.160.68.33:3001/api/search"
   endpoints:
+    vlm_poll: "/poll"
     poll: "/poll"
     complete: "/complete"
