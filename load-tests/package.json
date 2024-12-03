@@ -5,7 +5,8 @@
     "llm": "k6 run scripts/rag-asking.js -e TYPE=llm",
     "vlm": "k6 run scripts/rag-asking.js -e TYPE=vlm",
     "vllm": "k6 run scripts/vllm.js",
-    "rag-vllm": "k6 run scripts/rag-vllm.js"
+    "rag-vllm": "k6 run scripts/rag-vllm.js",
+    "vllm-doc": "k6 run scripts/vllm-doc.js"
   },
   "devDependencies": {
     "k6": "^0.0.0"

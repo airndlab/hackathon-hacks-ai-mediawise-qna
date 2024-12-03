@@ -52,7 +52,9 @@ Ranker: *qilowoq/bge-reranker-v2-m3-en-ru*
 
 ![vlm-stats.png](charts/vlm-stats.png)
 
-## Запросы напрямую к модели (VLLM)
+## Запросы однострочные напрямую к модели (VLLM)
+
+Однострочные вопросы на разные темы.
 
 Запросы:
 
@@ -62,7 +64,11 @@ Ranker: *qilowoq/bge-reranker-v2-m3-en-ru*
 
 ![vllm-stats.png](charts/vllm-stats.png)
 
-## Запросы к модели (VLLM) через сервис (rag)
+## Запросы однострочные к модели (VLLM) через сервис (rag)
+
+Однострочные вопросы на разные темы.
+
+Видно как увеличивается время работы, когда rag выступает по сути прокси для vllm.
 
 Запросы:
 
@@ -71,6 +77,18 @@ Ranker: *qilowoq/bge-reranker-v2-m3-en-ru*
 Ресурсы:
 
 ![rag-vllm-stats.png](charts/rag-vllm-stats.png)
+
+## Запросы с prompt напрямую к модели (VLLM)
+
+Запрос с prompt по документу.
+
+Запросы:
+
+![vllm-doc-req.png](charts/vllm-doc-req.png)
+
+Ресурсы:
+
+![vllm-doc-stats.png](charts/vllm-doc-stats.png)
 
 ## Запуск
 
