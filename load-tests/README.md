@@ -2,6 +2,14 @@
 
 ## Результаты
 
+Intel Broadwell with NVIDIA® Tesla® V100 (gpu-standard-v1)
+
+| Number of GPUs | VRAM, GB | Number of vCPUs | RAM, GB |
+|----------------|----------|-----------------|---------|
+| 1              | 32       | 8               | 96      |
+
+Кол-во пользователей: 1 2 4 8 12 24 32
+
 ### LLM
 
 Запросы:
