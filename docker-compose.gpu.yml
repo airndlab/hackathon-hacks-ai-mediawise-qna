@@ -22,6 +22,27 @@ services:
       - shared-net
     command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --gpu-memory-utilization 0.8 --device cuda
 
+  vllm_vlm:
+    image: vllm/vllm-openai:v0.6.4
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [ gpu ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - 8000:8000
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    networks:
+      - mwgpu-net
+      - shared-net
+    command: --model Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4 --allowed-local-media-path /data/pdf_imgs --quantization gptq --gpu-memory-utilization 0.75 --device cuda
+
   vllm_embedding:
     image: vllm/vllm-openai:v0.6.4
     ipc: host
@@ -45,9 +66,6 @@ services:
 
   rag:
     image: airndlab/mediawise-rag:2024.12.02-15-21
-    depends_on:
-      - vllm
-      - vllm_embedding
     deploy:
       resources:
         reservations:
@@ -62,16 +80,20 @@ services:
       - ./index:/data/index
     environment:
       - VLLM_URL=http://vllm:8000/v1
+      - VLLM_VLM_URL=http://vllm_vlm:8000/v1
       - VLLM_EMBEDDING_URL=http://vllm_embedding:8000/v1
       - CHROMA_HOSTNAME=158.160.68.33
-      - PIPELINE_TYPE=LLM
       - CHROMA_PORT=8000
       - YANDEX_API_TOKEN=${YANDEX_API_TOKEN:-noteken}
       - MAIN_DOCS_DIR=/data/dataset
+      - SUMMARY_DF_PATH=/data/dataset/summary_df.csv
+      - PDF_IMGS_DIR=/data/pdf_imgs
+      - INDEX_ROOT_DIR=/data/byaldi_index
       - DOCUMENT_STORES_DIR=/data/index
       - PROMPTS_CONFIG_PATH=/config/prompts.yaml
       - DICTS_CONFIG_PATH=/config/dicts.yaml
       - RAG_CONFIG_PATH=/config/rag.yaml
+      - VLM_RAG_CONFIG_PATH=/config/vlm_rag.yaml
       - API_CONFIG_PATH=/config/api.yaml
       - POOLING_ENABLED=${POOLING_ENABLED}
     ports:

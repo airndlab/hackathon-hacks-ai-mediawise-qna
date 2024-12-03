@@ -4,11 +4,37 @@ from typing import Optional, List, Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from openai import OpenAI
+
+import yaml
+
+# RAG CONFIG
+RAG_CONFIG_PATH = os.getenv("RAG_CONFIG_PATH")
+with open(RAG_CONFIG_PATH, "r") as file:
+    rag_config = yaml.safe_load(file)
+
+model = rag_config.get("model")
+
+# VLM_RAG CONFIG
+VLM_RAG_CONFIG_PATH = os.getenv("VLM_RAG_CONFIG_PATH")
+with open(VLM_RAG_CONFIG_PATH, "r") as file:
+    vlm_rag_config = yaml.safe_load(file)
+
+vlm_model = vlm_rag_config.get("vlm_model")
 
 PIPELINE_TYPE = os.getenv("PIPELINE_TYPE")
 
+if PIPELINE_TYPE == "LLM":
+    api_base_url = os.getenv("VLLM_URL")
+elif PIPELINE_TYPE == "VLM":
+    api_base_url = os.getenv("VLLM_VLM_URL")
 
 router = APIRouter()
+
+client = OpenAI(
+    api_key="VLLM-PLACEHOLDER-API-KEY",
+    base_url=api_base_url,
+)
 
 
 class QuestionRequest(BaseModel):
@@ -40,6 +66,26 @@ if PIPELINE_TYPE == "LLM":
         return AnswerResponse(
             message=model_response.get("message", ""),
             sources=model_response.get("sources", []),
+        )
+
+    @router.post("/simple_asking")
+    async def ask(request: QuestionRequest):
+        messages = [
+            {
+                "role": "user",
+                "content": request.question
+            }
+        ]
+
+        chat_response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+
+        output_text = chat_response.choices[0].message.content
+
+        return AnswerResponse(
+            message=output_text,
         )
 
 

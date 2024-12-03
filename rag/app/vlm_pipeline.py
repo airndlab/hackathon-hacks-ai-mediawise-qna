@@ -6,29 +6,19 @@ import io
 
 import pandas as pd
 
-import requests
 
 from typing import List, Union, Optional, Dict, Any, Tuple
-
-import base64
 
 from pathlib import Path
 from byaldi import RAGMultiModalModel
 
-from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer, AutoProcessor
-from qwen_vl_utils import process_vision_info
 import torch
 import gc
 
 from pdf2image import convert_from_path
 
-import asyncio
-import logging
-import time
 
-import sys
 import yaml
-import json
 
 from openai import OpenAI
 
