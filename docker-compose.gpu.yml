@@ -83,6 +83,7 @@ services:
       - ./pdf_imgs:/data/pdf_imgs
     environment:
       - PIPELINE_TYPE=${PIPELINE_TYPE:-LLM}
+      - USE_HISTORY=${USE_HISTORY:-true}
       - VLLM_URL=http://vllm:8000/v1
       - VLLM_VLM_URL=http://vllm_vlm:8000/v1
       - VLLM_EMBEDDING_URL=http://vllm_embedding:8000/v1
