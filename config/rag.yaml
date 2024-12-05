@@ -31,6 +31,8 @@ cross_encoder:
   top_k: 4
   threshold: 0.1
 
+conversation_last_k: 6
+
 vlm_model: Qwen/Qwen2-VL-7B-Instruct-GPTQ-Int4
 colvision_model: vidore/colpali-v1.2
 

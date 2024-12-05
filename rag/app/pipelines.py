@@ -17,10 +17,11 @@ import torch
 import yaml
 from PyPDF2 import PdfReader
 from haystack import Pipeline, Document, component, tracing
-from haystack.components.builders import ChatPromptBuilder
-from haystack.components.converters import PyPDFToDocument, DOCXToDocument, PPTXToDocument
+from haystack.components.builders import ChatPromptBuilder, PromptBuilder
+from haystack.components.converters import PyPDFToDocument, DOCXToDocument, PPTXToDocument, OutputAdapter
 from haystack.components.converters.csv import CSVToDocument
 from haystack.components.generators.chat import OpenAIChatGenerator
+from haystack.components.generators import OpenAIGenerator
 from haystack.components.joiners import DocumentJoiner
 from haystack.components.preprocessors import DocumentSplitter, DocumentCleaner
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
@@ -56,6 +57,8 @@ YANDEX_API_TOKEN = os.getenv("YANDEX_API_TOKEN")
 MAIN_DOCS_DIR = os.getenv('MAIN_DOCS_DIR')
 DOCUMENT_STORES_DIR = os.getenv('DOCUMENT_STORES_DIR')
 
+USE_HISTORY = os.getenv("USE_HISTORY", "false").lower() == "true"
+
 # PROMPT CONFIG
 PROMPTS_CONFIG_PATH = os.getenv("PROMPTS_CONFIG_PATH")
 with open(PROMPTS_CONFIG_PATH, 'r', encoding='utf-8') as file:
@@ -76,6 +79,8 @@ embedding_model = rag_config.get("embedding_model")
 cross_encoder_model = rag_config.get("cross_encoder_model")
 
 cross_encoder_config = rag_config.get("cross_encoder", {})
+
+conversation_last_k = rag_config.get("conversation_last_k", 6)
 
 split_function_config = rag_config.get("split_function", {})
 max_chunk_size = split_function_config.get("max_chunk_size", 300)
@@ -549,60 +554,92 @@ def find_manual_summary_documents():
 
 
 def create_rag_pipeline(
-    document_store,
-    ) -> Pipeline:
-  expander = QueryExpander(
-      system_prompt = prompt_config['query_expander_system_prompt'],
-      user_prompt_template = prompt_config['query_expander_user_prompt_template'],
-      json_gen_kwargs = json_gen_kwargs,
-  )
+        document_store,
+) -> Pipeline:
+    expander = QueryExpander(
+        system_prompt=prompt_config['query_expander_system_prompt'],
+        user_prompt_template=prompt_config['query_expander_user_prompt_template'],
+        json_gen_kwargs=json_gen_kwargs,
+    )
 
-  text_embedder = MultiQueryTextEmbedder(OpenAITextEmbedder(
-      model = embedding_model,
-      api_base_url = VLLM_EMBEDDING_URL,
-      api_key = Secret.from_token("VLLM-PLACEHOLDER-API-KEY"),
-      ))
+    query_rephrase_prompt_builder = PromptBuilder(prompt_config['query_rephrase_template'])
 
-  embedding_retriever = MultiQueryInMemoryRetriever(InMemoryEmbeddingRetriever(document_store), top_k = rag_config.get("embedding_retriever").get("top_k", 3))
-  bm25_retriever = MultiQueryInMemoryBM25Retriever(InMemoryBM25Retriever(document_store), top_k = rag_config.get("bm25_retriever").get("top_k", 3))
+    text_embedder = MultiQueryTextEmbedder(OpenAITextEmbedder(
+        model=embedding_model,
+        api_base_url=VLLM_EMBEDDING_URL,
+        api_key=Secret.from_token("VLLM-PLACEHOLDER-API-KEY"),
+    ))
 
-  document_joiner = DocumentJoiner(top_k = rag_config.get("document_joiner").get("top_k", 4), join_mode = "distribution_based_rank_fusion")
+    query_rephrase_generator = OpenAIGenerator(
+        api_key=Secret.from_token("VLLM-PLACEHOLDER-API-KEY"),
+        model=model,
+        api_base_url=VLLM_URL,
+        generation_kwargs=rag_gen_kwargs,
+        timeout=600,
+    )
 
-  cross_encoder = TransformersSimilarityRanker(
-      model = cross_encoder_model,
-      top_k = cross_encoder_config.get("top_k", 4),
-      score_threshold = cross_encoder_config.get("threshold", 0.0),
-      )
+    output_adapter = OutputAdapter(template="{{ replies[0] }}", output_type=str)
 
-  final_answer_prompt_builder = ChatPromptBuilder(variables=["documents", "question"])
-  final_answer_generator = create_generator(rag_gen_kwargs)
+    embedding_retriever = MultiQueryInMemoryRetriever(InMemoryEmbeddingRetriever(document_store),
+                                                      top_k=rag_config.get("embedding_retriever").get("top_k", 3))
+    bm25_retriever = MultiQueryInMemoryBM25Retriever(InMemoryBM25Retriever(document_store),
+                                                     top_k=rag_config.get("bm25_retriever").get("top_k", 3))
 
-  rag_pipeline = Pipeline()
+    document_joiner = DocumentJoiner(top_k=rag_config.get("document_joiner").get("top_k", 4),
+                                     join_mode="distribution_based_rank_fusion")
 
-  rag_pipeline.add_component("expander", expander)
-  rag_pipeline.add_component("text_embedder", text_embedder)
-  rag_pipeline.add_component("embedding_retriever", embedding_retriever)
-  rag_pipeline.add_component("bm25_retriever", bm25_retriever)
-  rag_pipeline.add_component("document_joiner", document_joiner)
-  rag_pipeline.add_component("cross_encoder", cross_encoder)
+    cross_encoder = TransformersSimilarityRanker(
+        model=cross_encoder_model,
+        top_k=cross_encoder_config.get("top_k", 4),
+        score_threshold=cross_encoder_config.get("threshold", 0.0),
+    )
 
-  rag_pipeline.add_component("final_answer_prompt_builder", final_answer_prompt_builder)
-  rag_pipeline.add_component("final_answer_llm", final_answer_generator)
+    final_answer_prompt_builder = ChatPromptBuilder(variables=["documents", "question", "memories"])
+    final_answer_generator = create_generator(rag_gen_kwargs)
 
-  rag_pipeline.connect("expander.queries", "text_embedder.queries")
-  rag_pipeline.connect("expander.queries", "bm25_retriever.queries")
-  rag_pipeline.connect("text_embedder.embeddings", "embedding_retriever")
-  rag_pipeline.connect("bm25_retriever", "document_joiner")
-  rag_pipeline.connect("embedding_retriever", "document_joiner")
-  rag_pipeline.connect("document_joiner", "cross_encoder")
+    rag_pipeline = Pipeline()
 
-  rag_pipeline.connect("cross_encoder", "final_answer_prompt_builder.documents")
-  rag_pipeline.connect("final_answer_prompt_builder", "final_answer_llm")
+    rag_pipeline.add_component("query_rephrase_prompt_builder", query_rephrase_prompt_builder)
+    rag_pipeline.add_component("query_rephrase_llm", query_rephrase_generator)
+    rag_pipeline.add_component("list_to_str_adapter", output_adapter)
 
-  return rag_pipeline
+    rag_pipeline.add_component("expander", expander)
+    rag_pipeline.add_component("text_embedder", text_embedder)
+    rag_pipeline.add_component("embedding_retriever", embedding_retriever)
+    rag_pipeline.add_component("bm25_retriever", bm25_retriever)
+    rag_pipeline.add_component("document_joiner", document_joiner)
+    rag_pipeline.add_component("cross_encoder", cross_encoder)
+
+    rag_pipeline.add_component("final_answer_prompt_builder", final_answer_prompt_builder)
+    rag_pipeline.add_component("final_answer_llm", final_answer_generator)
+
+    rag_pipeline.connect("query_rephrase_prompt_builder.prompt", "query_rephrase_llm")
+    rag_pipeline.connect("query_rephrase_llm.replies", "list_to_str_adapter")
+    rag_pipeline.connect("list_to_str_adapter", "expander.query")
+    rag_pipeline.connect("list_to_str_adapter", "cross_encoder.query")
+    rag_pipeline.connect("list_to_str_adapter", "final_answer_prompt_builder.question")
+
+    rag_pipeline.connect("expander.queries", "text_embedder.queries")
+    rag_pipeline.connect("expander.queries", "bm25_retriever.queries")
+    rag_pipeline.connect("text_embedder.embeddings", "embedding_retriever")
+    rag_pipeline.connect("bm25_retriever", "document_joiner")
+    rag_pipeline.connect("embedding_retriever", "document_joiner")
+    rag_pipeline.connect("document_joiner", "cross_encoder")
+
+    rag_pipeline.connect("cross_encoder", "final_answer_prompt_builder.documents")
+    rag_pipeline.connect("final_answer_prompt_builder", "final_answer_llm")
+
+    cross_encoder.warm_up()
+
+    return rag_pipeline
 
 
 rag_pipeline = create_rag_pipeline(document_store = document_store)
+
+chat_conversational_system_message = ChatMessage.from_system(prompt_config['qwen_chat_conversational_system_prompt'])
+chat_conversational_user_message = ChatMessage.from_user(prompt_config['qwen_chat_conversational_user_prompt_template'])
+
+final_answer_conversational_messages = [chat_conversational_system_message, chat_conversational_user_message]
 
 chat_system_message = ChatMessage.from_system(prompt_config['qwen_chat_system_prompt'])
 chat_user_message = ChatMessage.from_user(prompt_config['qwen_chat_user_prompt_template'])
@@ -617,24 +654,32 @@ class ModelResponse(BaseModel):
     answer: str
     references: Optional[List[Reference]] = None
 
-def get_chat_response(
-    question: str,
-    category: Optional[str] = None,
-    space: Optional[str] = None,
-    filename: Optional[str] = None,
-) -> ModelResponse:
 
+def get_chat_response(
+        question: str,
+        category: Optional[str] = None,
+        space: Optional[str] = None,
+        filename: Optional[str] = None,
+        conversation_history: Optional[List[ChatMessage]] = None,
+        use_history: bool = False,
+
+) -> ModelResponse:
     filters = {"operator": "AND", "conditions": []}
+
     if space:
         filters["conditions"].append({"field": "meta.space", "operator": "==", "value": space})
     if filename:
         filters["conditions"].append({"field": "meta.filename", "operator": "==", "value": filename})
     if category:
         filters["conditions"].append({"field": "meta.category", "operator": "==", "value": category})
+
+    memories = conversation_history[-conversation_last_k:] if use_history and conversation_history else []
+
     global response
     response = rag_pipeline.run({
-        "expander": {
-            "query": question,
+        "query_rephrase_prompt_builder": {
+            "memories": memories,
+            "query": question
         },
         "bm25_retriever": {
             "filters": filters,
@@ -642,14 +687,19 @@ def get_chat_response(
         "embedding_retriever": {
             "filters": filters,
         },
-        "cross_encoder": {
-            "query": question,
-        },
         "final_answer_prompt_builder": {
-            "question": question,
-            "template": final_answer_messages,
+            "memories": memories,
+            "template": final_answer_conversational_messages,
         },
-    }, include_outputs_from={"expander", "embedding_retriever", "document_joiner", "cross_encoder", "final_answer_prompt_builder"})
+    }, include_outputs_from={
+        "query_rephrase_prompt_builder",
+        "query_rephrase_llm",
+        "expander",
+        "embedding_retriever",
+        "document_joiner",
+        "cross_encoder",
+        "final_answer_prompt_builder"
+    })
 
     response_text = response['final_answer_llm']['replies'][0].content
 
@@ -673,24 +723,24 @@ def get_chat_response(
             # Находим индекс соответствующего символа '[' перед ']'
             first_bracket_idx = response_text.rfind('[', 0, last_bracket_idx)
             if first_bracket_idx != -1:
-                json_str = response_text[first_bracket_idx:last_bracket_idx+1]
+                json_str = response_text[first_bracket_idx:last_bracket_idx + 1]
                 try:
                     # Парсим JSON-строку
                     references_list = json.loads(json_str)
                     references = [Reference(**item) for item in references_list]
                     response_text = response_text[:first_bracket_idx].strip()
                 except json.JSONDecodeError as e:
-                    logger.warn(f"Ошибка при парсинге JSON: {e}")
+                    print(f"Ошибка при парсинге JSON: {e}")
     except Exception as e:
         logger.warn(f"Общая ошибка при обработке ответа: {e}")
 
     if references and cross_encoder_references:
-      for doc_joiner_ref in cross_encoder_references:
-          if doc_joiner_ref not in references:
-              references.append(doc_joiner_ref)
+        for doc_joiner_ref in cross_encoder_references:
+            if doc_joiner_ref not in references:
+                references.append(doc_joiner_ref)
 
     if references is None and cross_encoder_references:
-      references = cross_encoder_references
+        references = cross_encoder_references
 
     if "Я не знаю ответа на ваш вопрос" in response_text:
         response_text = "Я не знаю ответа на ваш вопрос"
@@ -765,19 +815,31 @@ def model_response_to_json(
     return json_output
 
 
-def get_chat_response_json(input_data: Dict[str, Any]) -> str:
+def get_chat_response_json(input_data: Dict[str, Any]) -> dict[str, Any]:
     # Извлечение значений из входного JSON-данных
     category = input_data.get("category", None)
     space = input_data.get("space", None)
     filename = input_data.get("filename", None)
     question = input_data.get("question", "")
+    history = input_data.get("history", [])
+
+    conversation_history= []
+
+    # Формируем сообщения
+    for role, content in history:
+        if role in {"human", "user"}:
+            conversation_history.append(ChatMessage.from_user(content))
+        else:  # Любая другая роль трактуется как сообщение ассистента
+            conversation_history.append(ChatMessage.from_assistant(content))
 
     # Получаем ответ модели с учетом извлеченных параметров
     model_response = get_chat_response(
         question=question,
         category=category,
         space=space,
-        filename=filename
+        filename=filename,
+        conversation_history=conversation_history,
+        use_history=USE_HISTORY,
     )
 
     # Преобразуем ответ модели в JSON с передачей space и categories
@@ -1389,12 +1451,14 @@ def generator_poll():
 
                 space = response_data.get("space") or None  # Присваиваем None, если пустая строка
                 filename = response_data.get("filename") or None  # Присваиваем None, если пустая строка
+                history = response_data.get("history", [])
 
                 input_data = {
                     "question": question,
                     "category": category,
                     "space": space,
                     "filename": filename,
+                    "history": history
                 }
                 model_response = get_chat_response_json(input_data)
 
