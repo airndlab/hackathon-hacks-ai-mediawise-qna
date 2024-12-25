@@ -7,7 +7,9 @@
     "vllm": "k6 run scripts/vllm.js",
     "rag-vllm": "k6 run scripts/rag-vllm.js",
     "vllm-doc": "k6 run scripts/vllm-doc.js",
-    "vllm-vlm-doc": "k6 run scripts/vllm-vlm-doc.js"
+    "vllm-vlm-doc": "k6 run scripts/vllm-vlm-doc.js",
+    "vllm-prompt-llm": "k6 run scripts/vllm-prompt-llm.js",
+    "vllm-prompt-vlm": "k6 run scripts/vllm-prompt-vlm.js"
   },
   "devDependencies": {
     "k6": "^0.0.0"
