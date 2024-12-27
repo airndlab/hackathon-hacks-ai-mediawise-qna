@@ -15,6 +15,30 @@ Intel Broadwell with NVIDIA® Tesla® V100 (gpu-standard-v1)
 |----------------|----------|-----------------|---------|
 | 1              | 32       | 8               | 96      |
 
+### Запросы к vLLM (LLM) с prompt и разным sleep
+
+#### 1 GPU 32 GB
+
+Запросы:
+
+![vllm-prompt-llm-req.png](charts/vllm-prompt-llm-req.png)
+
+Ресурсы:
+
+![vllm-prompt-llm-stats.png](charts/vllm-prompt-llm-stats.png)
+
+### Запросы к vLLM (VLM) с prompt и разным sleep
+
+#### 1 GPU 32 GB
+
+Запросы:
+
+![vllm-prompt-vlm-req.png](charts/vllm-prompt-vlm-req.png)
+
+Ресурсы:
+
+![vllm-prompt-vlm-stats.png](charts/vllm-prompt-vlm-stats.png)
+
 ### Полный LLM пайплайн
 
 ![img.png](images/img.png)
@@ -25,10 +49,11 @@ Embedder: *deepvk/USER-bge-m3*
 
 Ranker: *qilowoq/bge-reranker-v2-m3-en-ru*
 
-### VLM модели 
+### VLM модели
+
 Для индексациии: *vidore/colpali-v1.2*
 
-Для генерации (VLM): *Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4* 
+Для генерации (VLM): *Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4*
 
 ### Результаты
 
