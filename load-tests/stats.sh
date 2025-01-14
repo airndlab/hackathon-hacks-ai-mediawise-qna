@@ -28,12 +28,12 @@ while true; do
 
     # Получение использования GPU и GPU RAM через nvidia-smi
     GPU_STATS=$(docker exec "$CONTAINER" nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits 2>/dev/null)
-    if [ -n "$GPU_STATS" ]; then
+    if [ $? -eq 0 ]; then
       GPU_USAGE=$(echo "$GPU_STATS" | awk -F', ' '{print $1}')
       GPU_MEM_USAGE=$(echo "$GPU_STATS" | awk -F', ' '{print $2}')
     else
-      GPU_USAGE=0
-      GPU_MEM_USAGE=0
+      GPU_USAGE=""
+      GPU_MEM_USAGE=""
     fi
 
     # Запись данных в CSV
