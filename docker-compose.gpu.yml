@@ -106,6 +106,58 @@ services:
     networks:
       - mwgpu-net
 
+  vllm0:
+    image: vllm/vllm-openai:v0.6.4
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [ gpu ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - 8001:8000
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    networks:
+      - mwgpu-net
+    command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --gpu-memory-utilization 0.8 --device cuda
+
+  vllm1:
+    image: vllm/vllm-openai:v0.6.4
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '1' ]
+              capabilities: [ gpu ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - 8002:8000
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    networks:
+      - mwgpu-net
+    command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --gpu-memory-utilization 0.8 --device cuda
+
+  lb:
+    image: nginx:1.27-alpine3.20
+    ports:
+      - 8000:80
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - mwgpu-net
+    depends_on:
+      - vllm0
+      - vllm1
+
 networks:
   mwgpu-net:
   shared-net:
