@@ -100,7 +100,7 @@ services:
       - RAG_CONFIG_PATH=/config/rag.yaml
       - VLM_RAG_CONFIG_PATH=/config/vlm_rag.yaml
       - API_CONFIG_PATH=/config/api.yaml
-      - POOLING_ENABLED=${POOLING_ENABLED}
+      - POOLING_ENABLED=${POOLING_ENABLED:-false}
     ports:
       - 8080:8080
     networks:
