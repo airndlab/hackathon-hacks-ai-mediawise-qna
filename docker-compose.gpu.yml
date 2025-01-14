@@ -158,6 +158,26 @@ services:
       - vllm0
       - vllm1
 
+  vllm2:
+    image: vllm/vllm-openai:v0.6.4
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0', '1' ]
+              capabilities: [ gpu ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - 8000:8000
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    networks:
+      - mwgpu-net
+    command: --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4 --quantization gptq --gpu-memory-utilization 0.8 --device cuda --tensor-parallel-size 2
+
 networks:
   mwgpu-net:
   shared-net:
