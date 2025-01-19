@@ -26,8 +26,8 @@ with open(filename, mode='r') as file:
         service_name = row['service_name']
         cpu = float(row['cpu_usage(%)'])
         memory = float(row['memory_usage(MB)'])
-        gpu = float(row['gpu_usage(%)'])
-        gpu_memory = float(row['gpu_memory_usage(MB)'])
+        gpu = float(row['gpu_usage(%)']) if row['gpu_usage(%)'] else 0.0
+        gpu_memory = float(row['gpu_memory_usage(MB)']) if row['gpu_memory_usage(MB)'] else 0.0
 
         if service_name not in service_names:
             service_names.add(service_name)

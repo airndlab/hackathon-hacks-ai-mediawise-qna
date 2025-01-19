@@ -1,180 +1,99 @@
 # Нагрузочное тестирование
 
-## Запросы ответов на вопросы
+Отправка [вопросов](questions/llm-prompt.csv) с информацией о документах с промптом напрямую к LLM запущенную в vLLM.
 
-Сценарий: каждый пользователь задает вопрос после 15 секунд "прочтения" ответа на предыдущий вопрос
-(среднее время прочтения человеком текста ответа)
+Тест запускается с разной интенсивностью (время между запросами от одно пользователя): 15, 30 и 45 секунд.
 
-Запускается на разном кол-ве пользователей: 1 2 4 8 12 24 32
+Тест: [vllm-prompt-llm.js](scripts/vllm-prompt-llm.js)
 
-### ВМ
+## На одном ядре GPU
 
-Intel Broadwell with NVIDIA® Tesla® V100 (gpu-standard-v1)
+Intel Broadwell with NVIDIA® Tesla® V100
 
 | Number of GPUs | VRAM, GB | Number of vCPUs | RAM, GB |
 |----------------|----------|-----------------|---------|
 | 1              | 32       | 8               | 96      |
 
-### Запросы к vLLM (LLM) с prompt и разным sleep
+### Схема
 
-#### 1 GPU 32 GB
+![v100.png](images/v100.png)
 
-Запросы:
+### Модель
 
-![vllm-prompt-llm-req.png](charts/vllm-prompt-llm-req.png)
+[Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4)
 
-Ресурсы:
+### Результат
 
-![vllm-prompt-llm-stats.png](charts/vllm-prompt-llm-stats.png)
+Среднее время ответа:
 
-### Запросы к vLLM (VLM) с prompt и разным sleep
+![v100-vllm-prompt-llm-req.png](charts/v100-vllm-prompt-llm-req.png)
 
-#### 1 GPU 32 GB
+Потребление ресурсов:
 
-Запросы:
+![v100-vllm-prompt-llm-stats.png](charts/v100-vllm-prompt-llm-stats.png)
 
-![vllm-prompt-vlm-req.png](charts/vllm-prompt-vlm-req.png)
+## На двух ядрах GPU
 
-Ресурсы:
+Intel Cascade Lake with NVIDIA® Tesla® V100
 
-![vllm-prompt-vlm-stats.png](charts/vllm-prompt-vlm-stats.png)
+| Number of GPUs | VRAM, GB | Number of vCPUs | RAM, GB |
+|----------------|----------|-----------------|---------|
+| 2              | 64       | 16              | 96      |
 
-### Полный LLM пайплайн
+### С горизонтальным масштабированием
 
-![img.png](images/img.png)
+Запуск двух vLLM на каждое ядро.
 
-LLM: *Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4*
+#### Схема
 
-Embedder: *deepvk/USER-bge-m3*
+![v100x2h.png](images/v100x2h.png)
 
-Ranker: *qilowoq/bge-reranker-v2-m3-en-ru*
+#### Модель
 
-### VLM модели
+[Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4)
 
-Для индексациии: *vidore/colpali-v1.2*
+#### Результат
 
-Для генерации (VLM): *Qwen/Qwen2-VL-2B-Instruct-GPTQ-Int4*
+Среднее время ответа:
 
-### Результаты
+![v100x2h-vllm-prompt-llm-req.png](charts/v100x2h-vllm-prompt-llm-req.png)
 
-#### LLM
+Потребление ресурсов:
 
-Запросы:
+![v100x2h-vllm-prompt-llm-stats.png](charts/v100x2h-vllm-prompt-llm-stats.png)
 
-![llm-req.png](charts/llm-req.png)
+### С вертикальным масштабированием
 
-Ресурсы:
+Запуск одного vLLM на двух ядрах.
 
-![llm-stats.png](charts/llm-stats.png)
+#### Схема
 
-#### VLM
+![v100x2v.png](images/v100x2v.png)
 
-Запросы:
+#### Модель
 
-![vlm-req.png](charts/vlm-req.png)
+[Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4)
 
-Ресурсы:
+#### Результат
 
-![vlm-stats.png](charts/vlm-stats.png)
+Среднее время ответа:
 
-## Запросы однострочные напрямую к модели (VLLM)
+![v100x2v-vllm-prompt-llm-req.png](charts/v100x2v-vllm-prompt-llm-req.png)
 
-Однострочные вопросы на разные темы.
+### С вертикальным масштабированием + модель на 32B
 
-Запросы:
+Запуск одного vLLM на двух ядрах.
 
-![vllm-req.png](charts/vllm-req.png)
+#### Схема
 
-Ресурсы:
+![v100x32.png](images/v100x32.png)
 
-![vllm-stats.png](charts/vllm-stats.png)
+#### Модель
 
-## Запросы однострочные к модели (VLLM) через сервис (rag)
+[Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4](https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4)
 
-Однострочные вопросы на разные темы.
+#### Результат
 
-Видно как увеличивается время работы, когда rag выступает по сути прокси для vllm.
+Среднее время ответа:
 
-Запросы:
-
-![rag-vllm-req.png](charts/rag-vllm-req.png)
-
-Ресурсы:
-
-![rag-vllm-stats.png](charts/rag-vllm-stats.png)
-
-## Запросы с prompt напрямую к модели (VLLM)
-
-Запрос с prompt по документу.
-
-Запросы:
-
-![vllm-doc-req.png](charts/vllm-doc-req.png)
-
-Ресурсы:
-
-![vllm-doc-stats.png](charts/vllm-doc-stats.png)
-
-## Запросы с prompt напрямую к VLM модели (VLLM)
-
-Запрос с prompt по документу.
-
-Запросы:
-
-![vllm-vlm-doc-req.png](charts/vllm-vlm-doc-req.png)
-
-Ресурсы:
-
-![vllm-vlm-doc-stats.png](charts/vllm-vlm-doc-stats.png)
-
-## Запуск
-
-Сначала запускается скрипт сбора статистики потребления ресурсов на ВМ, дальше на ПК запускаются k6 тесты.
-После завершения тестов, скрипт сборка статистики завершается.
-
-### На ВМ
-
-```shell
-./stats.sh
-```
-
-### На ПК
-
-Для LLM:
-
-```shell
-./runner-llm.sh
-```
-
-Для VLM:
-
-```shell
-./runner-vlm.sh
-```
-
-## Вопросы
-
-Списки вопросов в [questions](questions):
-
-- для LLM - [llm.csv](questions/llm.csv)
-- для VLM - [vlm.csv](questions/vlm.csv)
-
-## Отчеты
-
-Результаты работы k6 в [reports](reports).
-
-## Графики
-
-Построить графики для LLM:
-
-```shell
-python plot.py reports/llm
-python plot-stats.py reports/llm/stats.csv
-```
-
-Построить графики для VLM:
-
-```shell
-python plot.py reports/vlm
-python plot-stats.py reports/vlm/stats.csv
-```
+![v100x32-vllm-prompt-llm-req.png](charts/v100x32-vllm-prompt-llm-req.png)
