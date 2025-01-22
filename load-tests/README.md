@@ -97,3 +97,8 @@ Intel Cascade Lake with NVIDIA® Tesla® V100
 Среднее время ответа:
 
 ![v100x32-vllm-prompt-llm-req.png](charts/v100x32-vllm-prompt-llm-req.png)
+
+
+## Сводная
+
+![summary-vllm-prompt-llm-req.png](charts/summary-vllm-prompt-llm-req.png)
